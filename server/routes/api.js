@@ -168,10 +168,10 @@ router.route('/messages')
                 console.timeEnd('sql');
                 //var limitResults = result.slice(initData.offset, initData.offsetEnd);
                 console.time('send');
-                res.status(200).json({ 'init': initData, 'messages': result });
                 console.timeEnd('send');
+                return res.json({ 'init': initData, 'messages': result });
               } else {
-                res.status(200).json({ 'init': {}, 'messages': [] });
+                return res.json({ 'init': {}, 'messages': [] });
               }
             });
         }
@@ -203,12 +203,12 @@ router.route('/messages')
             var timeFind = _.find(matches, function (msg) { return msg.timestamp > timeDiff; });
             if (timeFind) {
               logger.main.info(util.format('Ignoring duplicate: %o', data.message));
-              return res.status(200).send('Ignoring duplicate');
+              return res.send('Ignoring duplicate');
             }
           } else {
             // if no dupeTime then just end the search now, we have matches
             logger.main.info(util.format('Ignoring duplicate: %o', data.message));
-            return res.status(200).send('Ignoring duplicate');
+            return res.send('Ignoring duplicate');
           }
         }
         // no matches, maintain the array
@@ -241,7 +241,7 @@ router.route('/messages')
         }
         if (data.pluginData.ignore) {
           // stop processing
-          return res.status(200).send('Ignoring filtered');
+          return res.send('Ignoring filtered');
         }
         var address = data.address || '0000000';
         var message = data.message || 'null';
@@ -295,7 +295,7 @@ router.route('/messages')
           .then((row) => {
             if (row.length > 0 && filterDupes) {
               logger.main.info(util.format('Ignoring duplicate: %o', message));
-              res.status(200).send('Ignoring duplicate');
+              return res.send('Ignoring duplicate');
             } else {
               db.from('capcodes')
                 .select('id', 'ignore')
@@ -404,34 +404,34 @@ router.route('/messages')
 
                               });
                             }
-                            res.status(200).send('' + msgId);
+                            return res.send('' + msgId);
                           })
                           .catch((err) => {
-                            res.status(500).send(err);
                             logger.main.error(err)
+                            return res.status(500).send(err);
                           })
                       })
                       .catch((err) => {
-                        res.status(500).send(err);
                         logger.main.error(err)
+                        return res.status(500).send(err);
                       })
                   } else {
-                    res.status(200).send('Ignoring filtered');
+                    return res.send('Ignoring filtered');
                   }
                 })
                 .catch((err) => {
-                  res.status(500).send(err);
                   logger.main.error(err)
+                  return res.status(500).send(err);
                 })
             }
           })
           .catch((err) => {
-            res.status(500).send(err);
             logger.main.error(err)
+            return res.status(500).send(err);
           })
       })
     } else {
-      res.status(500).json({ message: 'Error - address or message missing' });
+      return res.status(500).json({ message: 'Error - address or message missing' });
     }
   });
 
@@ -453,7 +453,7 @@ router.route('/messages/:id')
       })
       .then((row) => {
         if (row.length === 0) {
-          return res.status(200).json({});
+          return res.json({});
         }
         if (HideCapcode) {
           if (!req.isAuthenticated() || (req.isAuthenticated() && req.user.role == 'user')) {
@@ -473,18 +473,18 @@ router.route('/messages/:id')
           }
         }
         if (row.ignore == 1) {
-          res.status(200).json({});
+          return res.json({});
         } else {
           if (pdwMode && !row.alias) {
-            res.status(200).json({});
+            return res.json({});
           } else {
-            res.status(200).json(row);
+            return res.json(row);
           }
         }
       })
       .catch((err) => {
         console.log(err);
-        res.status(500).send(err);
+        return res.status(500).send(err);
       })
   });
 
@@ -631,16 +631,16 @@ router.route('/messageSearch')
           initData.offsetEnd = initData.offset + initData.limit;
           var limitResults = result.slice(initData.offset, initData.offsetEnd);
           console.timeEnd('initEnd');
-          res.json({ 'init': initData, 'messages': limitResults });
+          return res.json({ 'init': initData, 'messages': limitResults });
         } else {
           console.timeEnd('sql');
-          res.status(200).json({ 'init': {}, 'messages': [] });
+          return res.json({ 'init': {}, 'messages': [] });
         }
       })
       .catch((err) => {
         console.timeEnd('sql');
         logger.main.error(err);
-        res.status(500).send(err);
+        return res.status(500).send(err);
       })
   });
 
@@ -688,7 +688,7 @@ router.route('/capcodes')
           queryBuilder.orderByRaw(`REPLACE(address, '_', '%')`)
       })
       .then((rows) => {
-        res.json(rows);
+        return res.json(rows);
       })
       .catch((err) => {
         logger.main.error(err);
@@ -739,19 +739,19 @@ router.route('/capcodes')
         })
         .returning('id')
         .then((result) => {
-          res.status(200).send('' + result);
           if (!updateRequired || updateRequired == 0) {
             nconf.set('database:aliasRefreshRequired', 1);
             nconf.save();
           }
+          return res.send('' + result);
         })
         .catch((err) => {
           logger.main.error(err)
-            .status(500).send(err);
+            return res.status(500).send(err);
         })
       logger.main.debug(util.format('%o', req.body || 'no request body'));
     } else {
-      res.status(500).json({ message: 'Error - address or alias missing' });
+      return res.status(500).json({ message: 'Error - address or alias missing' });
     }
   });
 
@@ -760,11 +760,10 @@ router.route('/capcodes/agency')
     db.from('capcodes')
       .distinct('agency')
       .then((rows) => {
-        res.status(200);
-        res.json(rows);
+        return res.json(rows);
       })
       .catch((err) => {
-        res.status(500).send(err);
+        return res.status(500).send(err);
       })
   });
 
@@ -775,8 +774,7 @@ router.route('/capcodes/agency/:id')
       .select('*')
       .where('agency', 'like', id)
       .then((rows) => {
-        res.status(200);
-        res.json(rows);
+        return res.json(rows);
       })
       .catch((err) => {
         logger.main.error(err);
@@ -799,8 +797,7 @@ router.route('/capcodes/:id')
       "onlyShowLoggedIn": false,
     };
     if (id == 'new') {
-      res.status(200);
-      res.json(defaults);
+      return res.json(defaults);
     } else {
       db.from('capcodes')
         .select('*')
@@ -809,11 +806,9 @@ router.route('/capcodes/:id')
           if (row.length > 0) {
             row = row[0]
             row.pluginconf = parseJSON(row.pluginconf);
-            res.status(200);
-            res.json(row);
+            return res.json(row);
           } else {
-            res.status(200);
-            res.json(defaults);
+            return res.json(defaults);
           }
         })
         .catch((err) => {
@@ -836,16 +831,16 @@ router.route('/capcodes/:id')
           .del()
           .where('id', 'in', idList)
           .then((result) => {
-            res.status(200).send({ 'status': 'ok' });
             if (!updateRequired || updateRequired == 0) {
               nconf.set('database:aliasRefreshRequired', 1);
               nconf.save();
             }
+            return res.send({ 'status': 'ok' });
           }).catch((err) => {
-            res.status(500).send(err);
+            return res.status(500).send(err);
           })
       } else {
-        res.status(500).send({ 'status': 'id list contained non-numbers' });
+        return res.status(500).send({ 'status': 'id list contained non-numbers' });
       }
     } else {
       if (req.body.address && req.body.alias) {
@@ -949,16 +944,16 @@ router.route('/capcodes/:id')
                 }
               }
             }
-            res.status(200).send({ 'status': 'ok', 'id': result })
+            return res.send({ 'status': 'ok', 'id': result })
           })
           .catch((err) => {
             console.timeEnd('insert');
             logger.main.error(err)
-            res.status(500).send(err);
+            return res.status(500).send(err);
           })
         logger.main.debug(util.format('%o', req.body || 'request body empty'));
       } else {
-        res.status(500).json({ message: 'Error - address or alias missing' });
+        return res.status(500).json({ message: 'Error - address or alias missing' });
       }
     }
   })
@@ -972,14 +967,14 @@ router.route('/capcodes/:id')
       .del()
       .where('id', id)
       .then((result) => {
-        res.status(200).send({ 'status': 'ok' });
         if (!updateRequired || updateRequired == 0) {
           nconf.set('database:aliasRefreshRequired', 1);
           nconf.save();
         }
+        return res.send({ 'status': 'ok' });
       })
       .catch((err) => {
-        res.status(500).send(err);
+        return res.status(500).send(err);
       })
     logger.main.debug(util.format('%o', req.body || 'request body empty'));
   });
@@ -994,8 +989,7 @@ router.route('/capcodeCheck/:id')
         if (row.length > 0) {
           row = row[0]
           row.pluginconf = parseJSON(row.pluginconf);
-          res.status(200);
-          res.json(row);
+          return res.json(row);
         } else {
           row = {
             "id": "",
@@ -1008,8 +1002,7 @@ router.route('/capcodeCheck/:id')
             "pluginconf": {},
             "onlyShowLoggedIn": 0
           };
-          res.status(200);
-          res.json(row);
+          return res.json(row);
         }
       })
       .catch((err) => {
@@ -1039,7 +1032,7 @@ router.route('/capcodeRefresh')
         console.timeEnd('updateMap');
         nconf.set('database:aliasRefreshRequired', 0);
         nconf.save();
-        res.status(200).send({ 'status': 'ok' });
+        return res.send({ 'status': 'ok' });
       })
       .catch((err) => {
         logger.main.error(err);
@@ -1063,10 +1056,9 @@ router.route('/capcodeExport')
       .then((rows) => {
         converter.json2csv(rows, function (err, data) {
           if (err) {
-            res.status(500).send(err);
-          } else {
-            res.status(200).send({ 'status': 'ok', 'data': data })
+            return res.status(500).send(err);
           }
+          return res.send({ 'status': 'ok', 'data': data })
         })
       })
       .catch((err) => {
@@ -1170,18 +1162,17 @@ router.route('/capcodeImport')
           };
           //Gather all the results, format for the frontend and send it back.
           let results = { "results": importresults }
-          res.status(200)
-          res.json(results)
           logger.main.debug('Import:' + JSON.stringify(importresults))
           nconf.set('database:aliasRefreshRequired', 1);
           nconf.save();
+          return res.json(results)
         } else {
           throw 'Error parasing CSV header'
         }
       })
       .catch((err) => {
-        res.status(500).send(err)
         logger.main.error(err)
+        return res.status(500).send(err)
       })
   });
 
@@ -1190,7 +1181,7 @@ router.route('/user')
     db.from('users')
       .select('id','givenname','surname','username','email','role','status','lastlogondate')
       .then((rows) => {
-        res.json(rows);
+        return res.json(rows);
       })
       .catch((err) => {
         logger.main.error(err);
@@ -1208,7 +1199,7 @@ router.route('/user')
         .then((row) => {
           if (row) {
             //add logging
-            res.status(400).send({ 'status': 'error', 'error': 'Username or Email exists' });
+            return res.status(400).send({ 'status': 'error', 'error': 'Username or Email exists' });
           } else {
             const salt = bcrypt.genSaltSync();
             const hash = bcrypt.hashSync(req.body.password, salt);
@@ -1228,16 +1219,16 @@ router.route('/user')
               .then((response) => {
                 //add logging
                 logger.main.debug('created user id: ' + response)
-                res.status(200).send({ 'status': 'ok', 'id': response[0].id });
+                return res.send({ 'status': 'ok', 'id': response[0].id });
               })
               .catch((err) => {
                 logger.main.error(err)
-                res.status(500).send({ 'status': 'error' });
+                return res.status(500).send({ 'status': 'error' });
               });
           }
         })
     } else {
-      res.status(400).send({ 'status': 'error', 'error': 'Invalid request body' });
+      return res.status(400).send({ 'status': 'error', 'error': 'Invalid request body' });
     }
   });
 
@@ -1250,8 +1241,7 @@ router.route('/userCheck/username/:id')
       .then((row) => {
         if (row.length > 0) {
           row = row[0]
-          res.status(200);
-          res.json(row);
+          return res.json(row);
         } else {
           row = {
             "username": "",
@@ -1262,8 +1252,7 @@ router.route('/userCheck/username/:id')
             "role": "user",
             "status": "active"
           };
-          res.status(200);
-          res.json(row);
+          return res.json(row);
         }
       })
       .catch((err) => {
@@ -1281,8 +1270,7 @@ router.route('/userCheck/username/:id')
       .then((row) => {
         if (row.length > 0) {
           row = row[0]
-          res.status(200);
-          res.json(row);
+          return res.json(row);
         } else {
           row = {
             "username": "",
@@ -1293,8 +1281,7 @@ router.route('/userCheck/username/:id')
             "role": "user",
             "status": "active"
           };
-          res.status(200);
-          res.json(row);
+          return res.json(row);
         }
       })
       .catch((err) => {
@@ -1316,27 +1303,23 @@ router.route('/user/:id')
       "status": "active"
     };
     if (id == 'new') {
-      res.status(200);
-      res.json(defaults);
-    } else {
-      db.from('users')
-        .select('id','givenname','surname','username','email','role','status','lastlogondate')
-        .where('id', id)
-        .then(function (row) {
-          if (row.length > 0) {
-            row = row[0]
-            res.status(200);
-            res.json(row);
-          } else {
-            res.status(200);
-            res.json(defaults);
-          }
-        })
-        .catch((err) => {
-          logger.main.error(err);
-          return next(err);
-        })
+      return res.json(defaults);
     }
+    db.from('users')
+      .select('id','givenname','surname','username','email','role','status','lastlogondate')
+      .where('id', id)
+      .then(function (row) {
+        if (row.length > 0) {
+          row = row[0]
+          return res.json(row);
+        } else {
+          return res.json(defaults);
+        }
+      })
+      .catch((err) => {
+        logger.main.error(err);
+        return next(err);
+      })
   })
   .post(authHelper.isAdmin, function (req, res, next) {
     var id = req.params.id || req.body.id || null;
@@ -1350,13 +1333,12 @@ router.route('/user/:id')
           .del()
           .where('id', 'in', idList)
           .then((result) => {
-            res.status(200).send({ 'status': 'ok' });
-
+            return res.send({ 'status': 'ok' });
           }).catch((err) => {
-            res.status(500).send(err);
+            return res.status(500).send(err);
           })
       } else {
-        res.status(400).send({ 'status': 'error', 'error': 'id list contained non-numbers' });
+        return res.status(400).send({ 'status': 'error', 'error': 'id list contained non-numbers' });
       }
     } else {
       if (req.body.username && req.body.email && req.body.givenname) {
@@ -1400,15 +1382,15 @@ router.route('/user/:id')
           .returning('id')
           .then((result) => {
             console.timeEnd('insert');
-            res.status(200).send({ 'status': 'ok', 'id': result[0].id })
+            return res.send({ 'status': 'ok', 'id': result[0].id })
           })
           .catch((err) => {
             console.timeEnd('insert');
             logger.main.error(err)
-            res.status(500).send(err);
+            return res.status(500).send(err);
           })
       } else {
-        res.status(400).send({'status': 'error', 'error': 'Error - required field missing' });
+        return res.status(400).send({'status': 'error', 'error': 'Error - required field missing' });
       }
     }
   })
@@ -1420,15 +1402,15 @@ router.route('/user/:id')
         .del()
         .where('id', id)
         .then((result) => {
-          res.status(200).send({ 'status': 'ok' });
+          return res.send({ 'status': 'ok' });
         })
         .catch((err) => {
-          res.status(500).send(err);
           logger.main.error(err)
+          return res.status(500).send(err);
         })
     } else {
-      res.status(400).json({ 'error': 'User ID 1 is protected' });
       logger.main.error('Unable to delete user ID 1')
+      return res.status(400).json({ 'error': 'User ID 1 is protected' });
     }
   });
 
@@ -1444,8 +1426,9 @@ function handleError(err, req, res, next) {
       text: err.toString()
     }
   };
+  logger.main.error(err.message);
   var statusCode = err.status || 500;
-  res.status(statusCode).json(output);
+  return res.status(statusCode).json(output);
 }
 
 function parseJSON(json) {

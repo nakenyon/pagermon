@@ -205,8 +205,7 @@ app.use(function(err, req, res, next) {
   res.locals.register = nconf.get('auth:registration')
 
   // render the error page
-  res.status(err.status || 500);
-  res.render(path.join(__dirname,'themes',theme, 'views', 'global', 'error'), { title: title });
+  res.status(err.status || 500).render(path.join(__dirname,'themes',theme, 'views', 'global', 'error'), { title: title });
 });
 
 // Add cronjob to automatically refresh aliases

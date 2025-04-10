@@ -167,5 +167,29 @@ exports.seed = function(db, Promise) {
                                 role: 'admin',
                                 status: 'disabled',
                         })
+                )
+                .then(() =>
+                        db('feeders').insert({
+                                id: 0,
+                                name: 'Test Feeder 0',
+                                apikey: 'testfeeder0',
+                                description: 'This is a test feeder with heartbeat every 5 seconds',
+                                last_message: null,
+                                last_heartbeat: db.fn.now(),
+                                heartbeat_enabled: true,
+                                heartbeat_interval: 5,
+                        })
+                )
+                .then(() =>
+                        db('feeders').insert({
+                                id: 1,
+                                name: 'Test Feeder 1',
+                                apikey: 'testfeeder1',
+                                description: 'This is a test feeder with disabled heartbeat',
+                                last_message: null,
+                                last_heartbeat: null,
+                                heartbeat_enabled: false,
+                                heartbeat_interval: null,
+                        })
                 );
 };

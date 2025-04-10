@@ -3,15 +3,13 @@ const LocalStrategy = require('passport-local').Strategy;
 const LocalAPIKeyStrategy = require('passport-localapikey-update').Strategy;
 
 const nconf = require('nconf');
-const logger = require('../log');
+const bcrypt = require('bcryptjs');
 
 const confFile = './config/config.json';
 nconf.file({ file: confFile });
 
 const init = require('./passport');
 const db = require('../knex/knex.js');
-
-const authHelper = require('../middleware/authhelper')
 
 const options = {};
 
@@ -28,7 +26,7 @@ passport.use(
                                 if (!user) {
                                         return done(null, false);
                                 }
-                                if (!authHelper.comparePass(password, user.password)) {
+                                if (!comparePass(password, user.password)) {
                                         return done(null, false);
                                 }
                                 return done(null, user);
@@ -46,7 +44,7 @@ passport.use(
                 // var key = auth.keys.find({ key: apikey });
                 if (key) {
                         // do a bcrypt compare
-                        if (apikey == key.key) {
+                        if (apikey === key.key) {
                                 return done(null, key.name);
                         }
                         return done(null, false);
@@ -55,5 +53,24 @@ passport.use(
         })
 );
 
-module.exports = passport;
+passport.use(
+        'login-feeder-api',
+        new LocalAPIKeyStrategy(async function(apikey, done) {
+                const feeder = await db('feeders')
+                        .select('id', 'name')
+                        .where('apikey', apikey)
+                        .first();
 
+                if (!feeder) {
+                        return done(null, false);
+                }
+
+                return done(null, feeder);
+        })
+);
+
+function comparePass(userPassword, databasePassword) {
+        return bcrypt.compareSync(userPassword, databasePassword);
+}
+
+module.exports = passport;

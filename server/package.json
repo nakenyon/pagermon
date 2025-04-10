@@ -4,11 +4,12 @@
   "private": true,
   "license": "Unlicense",
   "scripts": {
-    "start": "node ./bin/www",
-    "test": "nyc --reporter=lcov mocha --exit -t 60000",
+    "start": "node ./app.js",
+    "test": "nyc --reporter=lcov mocha --trace-warnings --exit -t 60000 ",
     "test-text": "nyc mocha --exit -t 60000",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "debug":  "DEBUG=express:* node ./app.js"
   },
   "dependencies": {
     "@pm2/io": "^5.0.2",
@@ -61,6 +62,7 @@
     "twit": "^1.1.20",
     "underscore": "^1.8.3",
     "util": "^0.10.3",
+    "uuid": "^11.1.0",
     "winston": "^3.1.0",
     "zone.js": "^0.8.12"
   },

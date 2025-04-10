@@ -17,6 +17,8 @@ var confFile = './config/config.json';
 nconf.file({ file: confFile });
 nconf.load();
 
+const handleError = require('../middleware/error_handling');
+
 router.use(bodyParser.json());       // to support JSON-encoded bodies
 router.use(bodyParser.urlencoded({     // to support URL-encoded bodies
   extended: true
@@ -48,6 +50,9 @@ var dbtype = nconf.get('database:type');
 // dupe init
 var msgBuffer = [];
 
+const feederRouter = require('./api/feeder.js');
+
+router.use('/feeders', feederRouter);
 
 router.route('/messages')
   .get(authHelper.isLoggedInMessages, function (req, res, next) {
@@ -1445,21 +1450,12 @@ router.route('/user/:id')
     }
   });
 
+
 router.use([handleError]);
 
 module.exports = router;
 
-function handleError(err, req, res, next) {
-  var output = {
-    error: {
-      name: err.name,
-      message: err.message,
-      text: err.toString()
-    }
-  };
-  var statusCode = err.status || 500;
-  res.status(statusCode).json(output);
-}
+
 
 function parseJSON(json) {
   var parsed;

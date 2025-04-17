@@ -1,19 +1,18 @@
-var express = require('express');
-var bodyParser = require('body-parser');
-var router = express.Router();
-var basicAuth = require('express-basic-auth');
-var bcrypt = require('bcryptjs');
-var util = require('util');
-var _ = require('underscore');
-const {pickBy} = require('lodash');
-var pluginHandler = require('../plugins/pluginHandler');
-var logger = require('../log');
-var db = require('../knex/knex.js');
-var converter = require('json-2-csv');
+const basicAuth = require('express-basic-auth');
+const bcrypt = require('bcryptjs');
+const bodyParser = require('body-parser');
+const converter = require('json-2-csv');
+const db = require('../knex/knex.js');
+const express = require('express');
+const { pickBy } = require('lodash');
+const logger = require('../log');
+const nconf = require('nconf');
+const util = require('util');
+const _ = require('underscore');
 
-var nconf = require('nconf');
+const router = express.Router();
 
-var confFile = './config/config.json';
+const confFile = './config/config.json';
 nconf.file({ file: confFile });
 nconf.load();
 
@@ -22,8 +21,9 @@ router.use(bodyParser.urlencoded({     // to support URL-encoded bodies
   extended: true
 }));
 
+const pluginHandler = require('../plugins/pluginHandler');
 const passport = require('../auth/local');
-var authHelper = require('../middleware/authhelper')
+const authHelper = require('../middleware/authhelper')
 
 router.use(function (req, res, next) {
   res.locals.login = req.isAuthenticated();
@@ -32,21 +32,23 @@ router.use(function (req, res, next) {
 });
 
 // defaults
-var initData = {};
-initData.limit = nconf.get('messages:defaultLimit');
-initData.replaceText = nconf.get('messages:replaceText');
-initData.currentPage = 0;
-initData.pageCount = 0;
-initData.msgCount = 0;
-initData.offset = 0;
+const initData = {
+  limit: nconf.get('messages:defaultLimit') || 20,
+  replaceText: nconf.get('messages:replaceText'),
+  currentPage: 0,
+  pageCount: 0,
+  msgCount: 0,
+  offset: 0
+};
+
 
 // auth variables
-var HideCapcode = nconf.get('messages:HideCapcode');
-var apiSecurity = nconf.get('messages:apiSecurity');
-var dbtype = nconf.get('database:type');
+const HideCapcode = nconf.get('messages:HideCapcode');
+const apiSecurity = nconf.get('messages:apiSecurity');
+const dbtype = nconf.get('database:type');
 
 // dupe init
-var msgBuffer = [];
+let msgBuffer = [];
 
 
 router.route('/messages')

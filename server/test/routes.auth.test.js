@@ -297,7 +297,7 @@ describe('POST /auth/profile/:id', () => {
                         })
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.body.message.should.eql('Please update your own details only');
                                 done();
                         });
@@ -418,7 +418,7 @@ describe('POST /auth/register', () => {
                                 email: 'Test@test.com',
                         })
                         .end((err, res) => {
-                                res.status.should.eql(400);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 res.body.error.should.eql('registration disabled');
                                 done();
@@ -439,7 +439,7 @@ describe('POST /auth/register', () => {
                         .end((err, res) => {
                                 res.status.should.eql(400);
                                 res.type.should.eql('application/json');
-                                res.body.error.should.eql('invalid data');
+                                res.body.error.should.eql('Username, Email and Password are required');
                                 done();
                         });
         });
@@ -456,9 +456,10 @@ describe('POST /auth/register', () => {
                                 email: 'unique@snowflake.com',
                         })
                         .end((err, res) => {
-                                res.status.should.eql(500);
+                                res.status.should.eql(400);
                                 res.type.should.eql('application/json');
                                 res.body.status.should.eql('failed');
+                                res.body.error.should.eql('Username, Email and Password are required');
                                 done();
                         });
         });
@@ -528,7 +529,27 @@ describe('POST /auth/reset', () => {
                                 should.not.exist(err);
                                 res.status.should.eql(400);
                                 res.body.status.should.eql('failed');
-                                res.body.error.should.eql('Password Blank or the Same');
+                                res.body.error.should.eql('New password equals the old password');
+                                done();
+                        });
+        });
+        it('should not accept a short password', done => {
+                passportStub.login({
+                        // hard set the ID as the query on the route doesn't lookup id's. This should be fixed in auth.js
+                        id: '2',
+                        username: 'useractive',
+                        password: '$2a$10$neQ/6P4YwrGxlBeFMJzW4OHxYWGI6Xp23mn/sPFfSDcGORR9jiDYu',
+                });
+                chai.request(server)
+                        .post('/auth/reset')
+                        .send({
+                                password: '123',
+                        })
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(400);
+                                res.body.status.should.eql('failed');
+                                res.body.error.should.eql('New password has to have at least 8 characters');
                                 done();
                         });
         });

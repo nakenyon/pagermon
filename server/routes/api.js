@@ -4,7 +4,6 @@ const bodyParser = require('body-parser');
 const converter = require('json-2-csv');
 const db = require('../knex/knex.js');
 const express = require('express');
-const { pickBy } = require('lodash');
 const logger = require('../log');
 const nconf = require('nconf');
 const util = require('util');
@@ -18,7 +17,7 @@ nconf.load();
 
 router.use(bodyParser.json());       // to support JSON-encoded bodies
 router.use(bodyParser.urlencoded({     // to support URL-encoded bodies
-  extended: true
+        extended: true
 }));
 
 const pluginHandler = require('../plugins/pluginHandler');
@@ -1479,7 +1478,7 @@ function parseJSON(json) {
  * @returns A sanitized version of the plugin configuration object holding only plugins with values set
  */
 function vaccumPluginConf(pconf) {
-  const cleaned = pickBy(pconf, p => {
+  const cleaned = _.pickBy(pconf, p => {
       return Object.keys(p).length > 0
   })
   return cleaned;

@@ -78,8 +78,8 @@ if (azureEnable) {
 
 checkForDbDriver(nconf.get('database:type'));
 
-var dbinit = require('./db');
-    dbinit.init();
+require('./db').init();
+
 var db = require('./knex/knex.js');
 
 var passport = require('./auth/local');

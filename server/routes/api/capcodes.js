@@ -1,4 +1,5 @@
 const express = require('express');
+const _ = require('underscore');
 
 const db = require('../../knex/knex');
 const authHelper = require('../../middleware/authhelper');
@@ -35,6 +36,33 @@ router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(
         res.json(capcodes);
 });
 
+async function getSingleCapcode(filter) {
+        const defaults = {
+                id: '',
+                address: '',
+                alias: '',
+                agency: '',
+                icon: 'question',
+                color: 'black',
+                ignore: 0,
+                pluginconf: {},
+                onlyShowLoggedIn: 0,
+        };
+        if (!filter) return defaults;
+
+        const filterCleaned = _.pick(filter, ['id', 'address']);
+        const capcode = await db
+                .from('capcodes')
+                .select('*')
+                .where(filterCleaned)
+                .first();
+
+        if (!capcode) return defaults;
+
+        capcode.pluginconf = parseJSON(capcode.pluginconf);
+        return capcode;
+}
+
 router.route('/capcodes/:id').get(authHelper.isAdmin, async function(req, res, next) {
         const { id } = req.params;
         const defaults = {
@@ -51,29 +79,13 @@ router.route('/capcodes/:id').get(authHelper.isAdmin, async function(req, res, n
         if (id === 'new') {
                 return res.json(defaults);
         }
-        const capcode = await db
-                .from('capcodes')
-                .select('*')
-                .where({ id })
-                .first();
 
-        if (!capcode) {
-                // TODO: I think this should be a 404, but the old code returns 200
-                return res.status(200).json({
-                        id: '',
-                        address: '',
-                        alias: '',
-                        agency: '',
-                        icon: 'question',
-                        color: 'black',
-                        ignore: 0,
-                        pluginconf: {},
-                        onlyShowLoggedIn: false,
-                });
-        }
+        res.json(await getSingleCapcode({ id }));
+});
 
-        capcode.pluginconf = parseJSON(capcode.pluginconf);
-        res.json(capcode);
+router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(req, res, next) {
+        const { address } = req.params;
+        res.json(await getSingleCapcode({ address }));
 });
 
 // TODO: Get it into a helpers library

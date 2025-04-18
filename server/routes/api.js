@@ -255,40 +255,6 @@ router.route('/capcodes/:id')
     logger.main.debug(util.format('%o', req.body || 'request body empty'));
   });
 
-router.route('/capcodeCheck/:id')
-  .get(authHelper.isAdmin, function (req, res, next) {
-    var id = req.params.id;
-    db.from('capcodes')
-      .select('*')
-      .where('address', id)
-      .then((row) => {
-        if (row.length > 0) {
-          row = row[0]
-          row.pluginconf = parseJSON(row.pluginconf);
-          res.status(200);
-          res.json(row);
-        } else {
-          row = {
-            "id": "",
-            "address": "",
-            "alias": "",
-            "agency": "",
-            "icon": "question",
-            "color": "black",
-            "ignore": 0,
-            "pluginconf": {},
-            "onlyShowLoggedIn": 0
-          };
-          res.status(200);
-          res.json(row);
-        }
-      })
-      .catch((err) => {
-        logger.main.error(err);
-        return next(err);
-      })
-  });
-
 router.route('/capcodeRefresh')
   .post(authHelper.isAdmin, function (req, res, next) {
     nconf.load();

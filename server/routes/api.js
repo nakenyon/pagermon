@@ -90,34 +90,7 @@ router.route('/capcodes')
     }
   });
 
-router.route('/capcodes/agency')
-  .get(authHelper.isAdmin, function (req, res, next) {
-    db.from('capcodes')
-      .distinct('agency')
-      .then((rows) => {
-        res.status(200);
-        res.json(rows);
-      })
-      .catch((err) => {
-        res.status(500).send(err);
-      })
-  });
 
-router.route('/capcodes/agency/:id')
-  .get(authHelper.isAdmin, function (req, res, next) {
-    var id = req.params.id;
-    db.from('capcodes')
-      .select('*')
-      .where('agency', 'like', id)
-      .then((rows) => {
-        res.status(200);
-        res.json(rows);
-      })
-      .catch((err) => {
-        logger.main.error(err);
-        return next(err);
-      })
-  });
 
 router.route('/capcodes/:id')
   .get(authHelper.isAdmin, function (req, res, next) {

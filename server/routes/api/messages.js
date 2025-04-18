@@ -542,6 +542,7 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
         }
 });
 
+// TODO: Get it into a helpers library
 function parseJSON(json) {
         try {
                 return JSON.parse(json);

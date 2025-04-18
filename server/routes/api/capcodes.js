@@ -1,5 +1,7 @@
 const express = require('express');
 const _ = require('underscore');
+const nconf = require('nconf');
+const util = require('util');
 
 const db = require('../../knex/knex');
 const authHelper = require('../../middleware/authhelper');
@@ -20,8 +22,44 @@ const router = express.Router();
  * @property {boolean} onlyShowLoggedIn Whether messages of this capcode should only be shown to logged in users
  */
 
+/**
+ * Updates or creates a capcode in the database
+ * @param {Capcode} capcode The capcode object to be inserted or updated
+ * @returns {Capcode} The capcode object with the id set
+ */
+async function modifyCapcode(capcode) {
+        const pluginConfig = capcode.pluginconf;
+        capcode.pluginconf = JSON.stringify(vaccumPluginConf(capcode.pluginconf)) || '{}';
+        const update = typeof capcode.id === 'number';
+
+        const insertion = _.defaults(capcode, {
+                address: '',
+                alias: '',
+                agency: '',
+                color: 'black',
+                icon: 'question',
+                ignore: 0,
+                pluginconf: {},
+                onlyShowLoggedIn: false,
+        });
+
+        const insertResult = await db
+                .from('capcodes')
+                .modify(qb => {
+                        if (update) qb.update(insertion).where('id', '=', insertion.id);
+                        else qb.insert(insertion);
+                })
+                .returning('id');
+
+        if (!update) capcode.id = insertResult[0].id;
+        capcode.pluginconf = pluginConfig;
+
+        return capcode;
+        // TODO: Capcode update!
+}
+
 router.route('/capcodes')
-        .get(authHelper.isAdmin, async function(req, res, next) {
+        .get(authHelper.isAdmin, async function(req, res) {
                 const capcodes = await db
                         .from('capcodes')
                         .select('*')
@@ -29,66 +67,28 @@ router.route('/capcodes')
 
                 res.json(capcodes);
         })
-        .post(authHelper.isAdmin, function(req, res, next) {
-                nconf.load();
-                var updateRequired = nconf.get('database:aliasRefreshRequired');
-                if (req.body.address && req.body.alias) {
-                        var id = req.body.id || null;
-                        var address = req.body.address || 0;
-                        var alias = req.body.alias || 'null';
-                        var agency = req.body.agency || 'null';
-                        var color = req.body.color || 'black';
-                        var icon = req.body.icon || 'question';
-                        var ignore = req.body.ignore || 0;
-                        const pluginconf = JSON.stringify(vaccumPluginConf(req.body.pluginconf)) || '{}';
-                        const onlyShowLoggedIn = req.body.onlyShowLoggedIn || false;
-                        db.from('capcodes')
-                                .where('id', '=', id)
-                                .modify(function(queryBuilder) {
-                                        if (id == null) {
-                                                queryBuilder.insert({
-                                                        id,
-                                                        address,
-                                                        alias,
-                                                        agency,
-                                                        color,
-                                                        icon,
-                                                        ignore,
-                                                        pluginconf,
-                                                        onlyShowLoggedIn,
-                                                });
-                                        } else {
-                                                queryBuilder.update({
-                                                        id,
-                                                        address,
-                                                        alias,
-                                                        agency,
-                                                        color,
-                                                        icon,
-                                                        ignore,
-                                                        pluginconf,
-                                                        onlyShowLoggedIn,
-                                                });
-                                        }
-                                })
-                                .returning('id')
-                                .then(result => {
-                                        res.status(200).send(`${result}`);
-                                        if (!updateRequired || updateRequired == 0) {
-                                                nconf.set('database:aliasRefreshRequired', 1);
-                                                nconf.save();
-                                        }
-                                })
-                                .catch(err => {
-                                        logger.main
-                                                .error(err)
-                                                .status(500)
-                                                .send(err);
-                                });
-                        logger.main.debug(util.format('%o', req.body || 'no request body'));
-                } else {
-                        res.status(400).json({ message: 'Error - address or alias missing' });
+        .post(authHelper.isAdmin, async function(req, res) {
+                if (!req.body.address || !req.body.alias) {
+                        const error = new Error('Error - address or alias missing');
+                        error.status = 400;
+                        throw error;
                 }
+
+                const capcode = _.pick(req.body, [
+                        'id',
+                        'address',
+                        'alias',
+                        'agency',
+                        'color',
+                        'icon',
+                        'ignore',
+                        'pluginconf',
+                        'onlyShowLoggedIn',
+                ]);
+
+                const inserted = await modifyCapcode(capcode);
+
+                res.json(inserted);
         });
 
 // TODO: Should maybe better be an individual route
@@ -176,7 +176,7 @@ function parseJSON(json) {
  * @returns A sanitized version of the plugin configuration object holding only plugins with values set
  */
 function vaccumPluginConf(pconf) {
-        const cleaned = _.pickBy(pconf, p => Object.keys(p).length > 0);
+        const cleaned = _.pick(pconf, p => Object.keys(p).length > 0);
         return cleaned;
 }
 

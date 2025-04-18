@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../../log');
 
 const messagesRouter = require('./messages');
 const capcodesRouter = require('./capcodes');
@@ -15,14 +16,18 @@ router.use(messagesRouter);
 router.use(capcodesRouter);
 
 function handleError(err, req, res, next) {
-        var output = {
+        logger.main.error(err);
+
+        // Write errors to the console in test mode, if they don't have a status -> Are not willingly sent by us.
+        if (process.env.NODE_ENV === 'test' && !err.status) console.log(err.message);
+        const output = {
                 error: {
                         name: err.name,
                         message: err.message,
                         text: err.toString(),
                 },
         };
-        var statusCode = err.status || 500;
+        const statusCode = err.status || 500;
         res.status(statusCode).json(output);
 }
 router.use(handleError);

@@ -32,7 +32,20 @@ nconf.save();
 passportStub.install(server);
 // set required settings in config file
 
-beforeEach(() => db.migrate.rollback().then(() => db.migrate.latest().then(() => db.seed.run().then(() => {nconf.set('messages:HideSource', false); nconf.set('messages:apiSecurity', false); nconf.set('messages:HideCapcode', false)}))));
+beforeEach(() =>
+        db.migrate.rollback().then(() =>
+                db.migrate.latest().then(() =>
+                        db.seed.run().then(() => {
+                                nconf.set('messages:HideSource', false);
+                                nconf.set('messages:apiSecurity', false);
+                                nconf.set('messages:HideCapcode', false);
+                                nconf.set('messages:duplicateTime', 0);
+                                nconf.set('messages:duplicateLimit', 0);
+                                nconf.set('messages:duplicateFiltering', true);
+                        })
+                )
+        )
+);
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('POST /api/messages', () => {
@@ -56,6 +69,47 @@ describe('POST /api/messages', () => {
                                 res.type.should.eql('text/html');
                                 res.text.should.be.eql('8');
                                 done();
+                        });
+        });
+        it('should not POST a duplicate message', done => {
+                const message = {
+                        address: '000000',
+                        message: '!@#$%^& (This is a duplicate test message. 1a2b3c4d5e6e7f) !@#$%^&',
+                        timestamp,
+                        source: 'CI-Test',
+                };
+
+                chai.request(server)
+                        .post('/api/messages')
+                        .set({
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'User-Agent': 'CI-Test',
+                                apikey: 'reallylongkeythatneedstobechanged',
+                        })
+                        .send(message)
+                        .end((err, res) => {
+                                // Assert that first messsage goes through
+                                should.not.exist(err);
+                                res.status.should.eql(200);
+                                res.type.should.eql('text/html');
+                                res.text.should.be.eql('8');
+
+                                chai.request(server)
+                                        .post('/api/messages')
+                                        .set({
+                                                'X-Requested-With': 'XMLHttpRequest',
+                                                'User-Agent': 'CI-Test',
+                                                apikey: 'reallylongkeythatneedstobechanged',
+                                        })
+                                        .send(message)
+                                        .end((err2, res2) => {
+                                                // Assert that second message does not go through
+                                                should.not.exist(err2);
+                                                res2.status.should.eql(200);
+                                                res2.type.should.eql('text/html');
+                                                res2.text.should.be.eql('Ignoring duplicate');
+                                                done();
+                                        });
                         });
         });
         it('should not POST new message with incorrect API key', done => {

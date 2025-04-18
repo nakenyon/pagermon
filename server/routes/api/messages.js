@@ -13,7 +13,7 @@ const pluginHandlerHandle = pluginHandler.handle;
 
 pluginHandlerHandle[promisify.custom] = (trigger, scope, data) =>
         new Promise(resolve => {
-                pluginHandler(trigger, scope, data, resolve);
+                pluginHandlerHandle(trigger, scope, data, resolve);
         });
 
 const handle = promisify(pluginHandlerHandle);
@@ -21,7 +21,99 @@ const handle = promisify(pluginHandlerHandle);
 // Buffer for duplicate checking.
 const duplicateBuffer = [];
 
-const router = express.Router();
+function isMemoryDuplicate(data) {
+        // If duplicate filtering is disabled, it's not a duplicate
+        if (!nconf.get('messages:duplicateFiltering')) return false;
+
+        // this is a bad solution and tech debt that will bite us in the ass if we ever go HA, but that's a problem for future me and that guy's a dick
+
+        const dupeTime = nconf.get('messages:duplicateTime') || 0;
+        const oldestAllowedTime = data.timestamp - dupeTime;
+        // if duplicate filtering is enabled, we want to populate the message buffer and check for duplicates within the limits
+        const matches = _.where(duplicateBuffer, { message: data.message, address: data.address });
+
+        if (matches.length > 0) {
+                // If we have matches and no dupe time limit, it is always a dupe
+                if (dupeTime === 0) return true;
+
+                // Else, check if it is 'young' enough to be a dupe
+                const timeFind = _.find(matches, possibleDupe => possibleDupe.timestamp > oldestAllowedTime);
+                if (timeFind) {
+                        return true;
+                }
+        }
+
+        // no matches, maintain the array
+        const dupeLimit = nconf.get('messages:duplicateLimit') || 0;
+        const dupeArrayLimit = dupeLimit === 0 ? 25 : dupeLimit;
+        if (duplicateBuffer.length > dupeArrayLimit) {
+                duplicateBuffer.shift();
+        }
+
+        // Add message to duplicate buffer.
+        duplicateBuffer.push(_.pick(data, ['message', 'timestamp', 'address']));
+        return false;
+}
+
+async function isDatabaseDuplicate(data) {
+        // If duplicate filtering is disabled, it's not a duplicate
+        if (!nconf.get('messages:duplicateFiltering')) return false;
+
+        const dupeTime = nconf.get('messages:duplicateTime') || 0;
+        const dupeLimit = nconf.get('messages:duplicateLimit') || 0;
+        const timeDiff = data.timestamp - dupeTime;
+
+        const matches = await db
+                .from('messages')
+                .select('id')
+                .modify(function(queryBuilder) {
+                        if (dupeLimit !== 0 && dupeTime !== 0) {
+                                queryBuilder
+                                        .where('id', 'in', function() {
+                                                this.select('*')
+                                                        // this wierd subquery is to keep mysql happy
+                                                        .from(function() {
+                                                                this.select('id')
+                                                                        .from('messages')
+                                                                        .where('timestamp', '>', timeDiff)
+                                                                        .orderBy('id', 'desc')
+                                                                        .limit(dupeLimit)
+                                                                        .as('temp_tab');
+                                                        });
+                                        })
+                                        .andWhere('message', '=', data.message)
+                                        .andWhere('address', '=', data.address);
+                        } else if (dupeLimit !== 0 && dupeTime === 0) {
+                                queryBuilder
+                                        .where('id', 'in', function() {
+                                                this.select('id')
+                                                        // this wierd subquery is to keep mysql happy
+                                                        .from(function() {
+                                                                this.select('id')
+                                                                        .from('messages')
+                                                                        .orderBy('id', 'desc')
+                                                                        .limit(dupeLimit)
+                                                                        .as('temp_tab');
+                                                        });
+                                        })
+                                        .andWhere('message', '=', data.message)
+                                        .andWhere('address', '=', data.address);
+                        } else if (dupeLimit === 0 && dupeTime !== 0) {
+                                queryBuilder
+                                        .where('id', 'in', function() {
+                                                this.select('id')
+                                                        .from('messages')
+                                                        .where('timestamp', '>', timeDiff);
+                                        })
+                                        .andWhere('message', '=', data.message)
+                                        .andWhere('address', '=', data.address);
+                        } else {
+                                queryBuilder.where('message', '=', data.message).andWhere('address', '=', data.address);
+                        }
+                });
+
+        return matches.length !== 0;
+}
 
 function getMessageQuery(req) {
         const pdwMode = nconf.get('messages:pdwMode');
@@ -44,6 +136,8 @@ function getMessageQuery(req) {
         });
         return queryTemplate.clone();
 }
+
+const router = express.Router();
 
 router.route('/messages')
         .get(authHelper.isLoggedInMessages, async function(req, res) {
@@ -123,319 +217,144 @@ router.route('/messages')
                         res.status(500).json({ init: {}, messages: [] });
                 }
         })
-        .post(authHelper.isAdmin, function(req, res) {
+        .post(authHelper.isAdmin, async function(req, res) {
                 if (!req.body.address || !req.body.message)
                         return res.status(400).json({ message: 'Error - address or message missing' });
 
                 const dbtype = nconf.get('database:type');
-                const HideCapcode = nconf.get('messages:HideCapcode');
-                const filterDupes = nconf.get('messages:duplicateFiltering');
-                const dupeLimit = nconf.get('messages:duplicateLimit') || 0; // default 0
-                const dupeTime = nconf.get('messages:duplicateTime') || 0; // default 0
-                const pdwMode = nconf.get('messages:pdwMode');
-                const adminShow = nconf.get('messages:adminShow');
-                let data = req.body;
+
+                let data = _.pick(req.body, ['address', 'message', 'timestamp', 'source', 'datetime']);
                 data.pluginData = {};
 
-                if (filterDupes) {
-                        // this is a bad solution and tech debt that will bite us in the ass if we ever go HA, but that's a problem for future me and that guy's a dick
-
-                        const dupeTimestamp = data.timestamp || data.datetime || Date.now();
-
-                        const timeDiff = dupeTimestamp - dupeTime;
-                        // if duplicate filtering is enabled, we want to populate the message buffer and check for duplicates within the limits
-                        const matches = _.where(duplicateBuffer, { message: data.message, address: data.address });
-                        if (matches.length > 0) {
-                                if (dupeTime !== 0) {
-                                        // search the matching messages and see if any match the time constrain
-                                        var timeFind = _.find(matches, function(msg) {
-                                                return msg.timestamp > timeDiff;
-                                        });
-                                        if (timeFind) {
-                                                logger.main.info(util.format('Ignoring duplicate: %o', data.message));
-                                                return res.status(200).send('Ignoring duplicate');
-                                        }
-                                } else {
-                                        // if no dupeTime then just end the search now, we have matches
-                                        logger.main.info(util.format('Ignoring duplicate: %o', data.message));
-                                        return res.status(200).send('Ignoring duplicate');
-                                }
-                        }
-                        // no matches, maintain the array
-                        var dupeArrayLimit = dupeLimit;
-                        if (dupeArrayLimit == 0) {
-                                dupeArrayLimit == 25; // should provide sufficient buffer, consider increasing if duplicates appear when users have no dupeLimit
-                        }
-                        if (duplicateBuffer.length > dupeArrayLimit) {
-                                duplicateBuffer.shift();
-                        }
-                        duplicateBuffer.push(_.pick(data, ['message', 'timestamp', 'address']));
+                if (isMemoryDuplicate(data)) {
+                        logger.main.info(util.format('Ignoring memory duplicate: %o', data));
+                        return res.status(200).send('Ignoring duplicate');
                 }
 
-                if (data.timestamp) var { timestamp } = data;
-                else if (data.datetime) {
+                if (!data.timestamp && data.datetime)
                         logger.main.warn(
-                                `An incoming message from ${data.source ||
-                                        'an unknown source'} contains the timestamp as field 'datetime'. Update the message source to use the variable 'timestamp' instead!`
+                                `Deprecation notice: An incoming message from ${data.source || 'an unknown source'}
+                                contains the timestamp as field 'datetime'. The field datetime will be removed from future versions.
+                                Update the message source to use the variable 'timestamp' instead.`
                         );
-                        var timestamp = data.datetime;
-                } else var timestamp = 1;
+                data.timestamp = data.timestamp || data.datetime || Date.now();
 
                 // send data to pluginHandler before proceeding
                 logger.main.debug('beforeMessage start');
-                pluginHandler.handle('message', 'before', data, function(response) {
-                        logger.main.debug(util.format('%o', response));
-                        logger.main.debug('beforeMessage done');
-                        if (response && response.pluginData) {
-                                // only set data to the response if it's non-empty and still contains the pluginData object
-                                data = response;
-                        }
-                        if (data.pluginData.ignore) {
-                                // stop processing
-                                return res.status(200).send('Ignoring filtered');
-                        }
-                        var address = data.address || '0000000';
-                        var message = data.message || 'null';
-                        var timeDiff = timestamp - dupeTime;
-                        var source = data.source || 'UNK';
-                        db.from('messages')
-                                .select('*')
-                                .modify(function(queryBuilder) {
-                                        if (dupeLimit != 0 && dupeTime != 0) {
-                                                queryBuilder
-                                                        .where('id', 'in', function() {
-                                                                this.select('*')
-                                                                        // this wierd subquery is to keep mysql happy
-                                                                        .from(function() {
-                                                                                this.select('id')
-                                                                                        .from('messages')
-                                                                                        .where(
-                                                                                                'timestamp',
-                                                                                                '>',
-                                                                                                timeDiff
-                                                                                        )
-                                                                                        .orderBy('id', 'desc')
-                                                                                        .limit(dupeLimit)
-                                                                                        .as('temp_tab');
-                                                                        });
-                                                        })
-                                                        .andWhere('message', '=', message)
-                                                        .andWhere('address', '=', address);
-                                        } else if (dupeLimit != 0 && dupeTime == 0) {
-                                                queryBuilder
-                                                        .where('id', 'in', function() {
-                                                                this.select('*')
-                                                                        // this wierd subquery is to keep mysql happy
-                                                                        .from(function() {
-                                                                                this.select('id')
-                                                                                        .from('messages')
-                                                                                        .orderBy('id', 'desc')
-                                                                                        .limit(dupeLimit)
-                                                                                        .as('temp_tab');
-                                                                        });
-                                                        })
-                                                        .andWhere('message', '=', message)
-                                                        .andWhere('address', '=', address);
-                                        } else if (dupeLimit == 0 && dupeTime != 0) {
-                                                queryBuilder
-                                                        .where('id', 'in', function() {
-                                                                this.select('id')
-                                                                        .from('messages')
-                                                                        .where('timestamp', '>', timeDiff);
-                                                        })
-                                                        .andWhere('message', '=', message)
-                                                        .andWhere('address', '=', address);
-                                        } else {
-                                                queryBuilder
-                                                        .where('message', '=', message)
-                                                        .andWhere('address', '=', address);
-                                        }
+
+                const pluginBeforeResponse = await handle('message', 'before', data);
+
+                logger.main.debug(util.format('%o', pluginBeforeResponse));
+                logger.main.debug('beforeMessage done');
+
+                if (pluginBeforeResponse && pluginBeforeResponse.pluginData)
+                        // only set data to the response if it's non-empty and still contains the pluginData object
+                        data = pluginBeforeResponse;
+
+                if (data.pluginData.ignore)
+                        // stop processing
+                        return res.status(200).send('Ignoring filtered');
+
+                data.address = data.address || '0000000';
+                data.message = data.message || 'null';
+                data.source = data.source || 'UNK';
+
+                if (await isDatabaseDuplicate(data)) {
+                        logger.main.info(util.format('Ignoring database duplicate: %o', data));
+                        return res.status(200).send('Ignoring duplicate');
+                }
+
+                const capcode = await db
+                        .from('capcodes')
+                        .select('id', 'ignore')
+                        .whereRaw(`? LIKE ??`, [data.address, 'address'])
+                        .orderByRaw(`REPLACE("address", '_', '%') DESC`)
+                        .first();
+
+                const ignore = capcode ? capcode.ignore : false;
+                if (ignore) {
+                        logger.main.info(`Ignoring filtered address: ${data.address} alias: ${capcode.id}`);
+                        return res.status(200).send('Ignoring filtered');
+                }
+
+                if (data.pluginData.aliasID) data.alias_id = data.pluginData.aliasID;
+                else if (capcode) data.alias_id = capcode.id;
+                else data.alias_id = null;
+
+                const messageId = (
+                        await db('messages')
+                                .insert(_.pick(data, ['address', 'message', 'timestamp', 'source', 'alias_id']))
+                                .returning('id')
+                )[0].id;
+
+                if (dbtype === 'oracledb') {
+                        // oracle requires update of search index after insert, can't be trigger for some reason
+                        db.raw(`BEGIN CTX_DDL.SYNC_INDEX('search_idx'); END;`)
+                                .then(resp => {
+                                        logger.main.debug('search_idx sync complete');
+                                        logger.main.debug(resp);
                                 })
-                                .then(row => {
-                                        if (row.length > 0 && filterDupes) {
-                                                logger.main.info(util.format('Ignoring duplicate: %o', message));
-                                                res.status(200).send('Ignoring duplicate');
-                                        } else {
-                                                db.from('capcodes')
-                                                        .select('id', 'ignore')
-                                                        // TODO: test this doesn't break other DBs - there's a lot of quote changes here
-                                                        .modify(function(queryBuilder) {
-                                                                if (dbtype == 'oracledb') {
-                                                                        queryBuilder.whereRaw(
-                                                                                `'${address}' LIKE "address"`
-                                                                        );
-                                                                        queryBuilder.orderByRaw(
-                                                                                `REPLACE("address", '_', '%') DESC`
-                                                                        );
-                                                                } else {
-                                                                        queryBuilder.whereRaw(
-                                                                                `"${address}" LIKE address`
-                                                                        );
-                                                                        queryBuilder.orderByRaw(
-                                                                                `REPLACE(address, '_', '%') DESC`
-                                                                        );
-                                                                }
-                                                        })
-                                                        .then(row => {
-                                                                var insert;
-                                                                var alias_id = null;
-                                                                if (row.length > 0) {
-                                                                        row = row[0];
-                                                                        if (row.ignore == 1) {
-                                                                                insert = false;
-                                                                                logger.main.info(
-                                                                                        `Ignoring filtered address: ${address} alias: ${row.id}`
-                                                                                );
-                                                                        } else {
-                                                                                insert = true;
-                                                                                alias_id = row.id;
-                                                                        }
-                                                                } else {
-                                                                        insert = true;
-                                                                }
+                                .catch(err => {
+                                        logger.main.error('search_idx sync failed');
+                                        logger.main.error(err);
+                                });
+                }
 
-                                                                // overwrite alias_id if set from plugin
-                                                                if (data.pluginData.aliasId) {
-                                                                        alias_id = data.pluginData.aliasId;
-                                                                }
+                const insertedMessage = await db
+                        .from('messages')
+                        .select(
+                                'messages.*',
+                                'capcodes.alias',
+                                'capcodes.address as capcodeAddress',
+                                'capcodes.agency',
+                                'capcodes.icon',
+                                'capcodes.color',
+                                'capcodes.ignore',
+                                'capcodes.pluginconf',
+                                'capcodes.onlyShowLoggedIn'
+                        )
+                        .modify(function(queryBuilder) {
+                                queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id');
+                        })
+                        .where('messages.id', '=', messageId);
 
-                                                                if (insert === true) {
-                                                                        var insertmsg = {
-                                                                                address,
-                                                                                message,
-                                                                                timestamp,
-                                                                                source,
-                                                                                alias_id,
-                                                                        };
-                                                                        db('messages')
-                                                                                .insert(insertmsg)
-                                                                                .then(result => {
-                                                                                        // emit the full message
-                                                                                        const msgId = Object.keys(
-                                                                                                result[0]
-                                                                                        ).includes('id')
-                                                                                                ? result[0].id
-                                                                                                : result[0];
+                // Copy timestamp to datetime for backwards compatibility.
+                insertedMessage.datetime = insertedMessage.timestamp;
 
-                                                                                        if (dbtype == 'oracledb') {
-                                                                                                // oracle requires update of search index after insert, can't be trigger for some reason
-                                                                                                db.raw(
-                                                                                                        `BEGIN CTX_DDL.SYNC_INDEX('search_idx'); END;`
-                                                                                                )
-                                                                                                        .then(resp => {
-                                                                                                                logger.main.debug(
-                                                                                                                        'search_idx sync complete'
-                                                                                                                );
-                                                                                                                logger.main.debug(
-                                                                                                                        resp
-                                                                                                                );
-                                                                                                        })
-                                                                                                        .catch(err => {
-                                                                                                                logger.main.error(
-                                                                                                                        'search_idx sync failed'
-                                                                                                                );
-                                                                                                                logger.main.error(
-                                                                                                                        err
-                                                                                                                );
-                                                                                                        });
-                                                                                        }
+                // send data to pluginHandler after processing
+                insertedMessage.pluginData = data.pluginData;
+                insertedMessage.pluginconf = parseJSON(insertedMessage.pluginconf) || {};
+                insertedMessage.wildcard = insertedMessage.address !== insertedMessage.capcodeAddress;
 
-                                                                                        db.from('messages')
-                                                                                                .select(
-                                                                                                        'messages.*',
-                                                                                                        'capcodes.alias',
-                                                                                                        'capcodes.agency',
-                                                                                                        'capcodes.icon',
-                                                                                                        'capcodes.color',
-                                                                                                        'capcodes.ignore',
-                                                                                                        'capcodes.pluginconf',
-                                                                                                        'capcodes.onlyShowLoggedIn'
-                                                                                                )
-                                                                                                .modify(function(
-                                                                                                        queryBuilder
-                                                                                                ) {
-                                                                                                        queryBuilder.leftJoin(
-                                                                                                                'capcodes',
-                                                                                                                'capcodes.id',
-                                                                                                                '=',
-                                                                                                                'messages.alias_id'
-                                                                                                        );
-                                                                                                })
-                                                                                                .where(
-                                                                                                        'messages.id',
-                                                                                                        '=',
-                                                                                                        msgId
-                                                                                                )
-                                                                                                .then(row => {
-                                                                                                        if (
-                                                                                                                row.length >
-                                                                                                                0
-                                                                                                        ) {
-                                                                                                                row =
-                                                                                                                        row[0];
-                                                                                                                // send data to pluginHandler after processing
-                                                                                                                row.pluginData =
-                                                                                                                        data.pluginData;
+                logger.main.debug('afterMessage start');
 
-                                                                                                                // Copy timestamp to datetime for backwards compatibility.
-                                                                                                                row.datetime =
-                                                                                                                        row.timestamp;
+                const messageAfterResponse = await handle('message', 'after', insertedMessage);
 
-                                                                                                                if (
-                                                                                                                        row.pluginconf
-                                                                                                                ) {
-                                                                                                                        row.pluginconf = parseJSON(
-                                                                                                                                row.pluginconf
-                                                                                                                        );
-                                                                                                                } else {
-                                                                                                                        row.pluginconf = {};
-                                                                                                                }
-                                                                                                                logger.main.debug(
-                                                                                                                        'afterMessage start'
-                                                                                                                );
-                                                                                                                pluginHandler.handle(
-                                                                                                                        'message',
-                                                                                                                        'after',
-                                                                                                                        row,
-                                                                                                                        function(
-                                                                                                                                response
-                                                                                                                        ) {
-                                                                                                                                logger.main.debug(
-                                                                                                                                        util.format(
-                                                                                                                                                '%o',
-                                                                                                                                                response
-                                                                                                                                        )
-                                                                                                                                );
-                                                                                                                                logger.main.debug(
-                                                                                                                                        'afterMessage done'
-                                                                                                                                );
-                                                                                                                                // remove the pluginconf object before firing socket message
-                                                                                                                                delete row.pluginconf;
-                                                                                                                                const fields = [
-                                                                                                                                        'id',
-                                                                                                                                        'message',
-                                                                                                                                        'source',
-                                                                                                                                        'timestamp',
-                                                                                                                                        'datetime',
-                                                                                                                                        'alias_id',
-                                                                                                                                        'alias',
-                                                                                                                                        'agency',
-                                                                                                                                        'icon',
-                                                                                                                                        'color',
-                                                                                                                                        'ignore',
-                                                                                                                                ];
-                                                                                                                                if (
-                                                                                                                                        !HideCapcode
-                                                                                                                                )
-                                                                                                                                        fields.push(
-                                                                                                                                                'address'
-                                                                                                                                        ); // Show address, when hideCapcode is off.
-                                                                                                                                const rowUser = _.pick(
-                                                                                                                                        row,
-                                                                                                                                        fields
-                                                                                                                                );
+                logger.main.debug(util.format('%o', messageAfterResponse));
+                logger.main.debug('afterMessage done');
 
-                                                                                                                                /*
+                // remove the pluginconf object before firing socket message
+                delete insertedMessage.pluginconf;
+                const fields = [
+                        'id',
+                        'message',
+                        'timestamp',
+                        'datetime',
+                        'alias_id',
+                        'alias',
+                        'agency',
+                        'icon',
+                        'color',
+                ];
+
+                if (!nconf.get('messages:HideCapcode')) fields.push('address'); // Show address, when hideCapcode is off.
+                if (!nconf.get('messages:HideSource')) fields.push('source'); // Likewise with source.
+
+                const pdwMode = nconf.get('messages:pdwMode');
+                const adminShow = nconf.get('messages:adminShow');
+                const rowUser = _.pick(insertedMessage, fields);
+
+                /*
                                   If:
                                   - The admin has no alias
                                   - And pdw mode is on
@@ -444,119 +363,15 @@ router.route('/messages')
                                     - AdminShow is on
                                     -> Do send to admins though
                                 */
-                                                                                                                                if (
-                                                                                                                                        pdwMode
-                                                                                                                                ) {
-                                                                                                                                        if (
-                                                                                                                                                row.alias_id ===
-                                                                                                                                                null
-                                                                                                                                        ) {
-                                                                                                                                                if (
-                                                                                                                                                        adminShow
-                                                                                                                                                )
-                                                                                                                                                        req.io
-                                                                                                                                                                .to(
-                                                                                                                                                                        'admin'
-                                                                                                                                                                )
-                                                                                                                                                                .emit(
-                                                                                                                                                                        'messagePost',
-                                                                                                                                                                        row
-                                                                                                                                                                );
-                                                                                                                                        } else {
-                                                                                                                                                req.io
-                                                                                                                                                        .to(
-                                                                                                                                                                'admin'
-                                                                                                                                                        )
-                                                                                                                                                        .emit(
-                                                                                                                                                                'messagePost',
-                                                                                                                                                                row
-                                                                                                                                                        );
-                                                                                                                                                req.io
-                                                                                                                                                        .to(
-                                                                                                                                                                'user'
-                                                                                                                                                        )
-                                                                                                                                                        .emit(
-                                                                                                                                                                'messagePost',
-                                                                                                                                                                rowUser
-                                                                                                                                                        );
-                                                                                                                                                if (
-                                                                                                                                                        !row.onlyShowLoggedIn
-                                                                                                                                                )
-                                                                                                                                                        req.io
-                                                                                                                                                                .to(
-                                                                                                                                                                        'anonymous'
-                                                                                                                                                                )
-                                                                                                                                                                .emit(
-                                                                                                                                                                        'messagePost',
-                                                                                                                                                                        rowUser
-                                                                                                                                                                );
-                                                                                                                                        }
-                                                                                                                                } else {
-                                                                                                                                        req.io
-                                                                                                                                                .to(
-                                                                                                                                                        'admin'
-                                                                                                                                                )
-                                                                                                                                                .emit(
-                                                                                                                                                        'messagePost',
-                                                                                                                                                        row
-                                                                                                                                                );
-                                                                                                                                        req.io
-                                                                                                                                                .to(
-                                                                                                                                                        'user'
-                                                                                                                                                )
-                                                                                                                                                .emit(
-                                                                                                                                                        'messagePost',
-                                                                                                                                                        rowUser
-                                                                                                                                                );
-                                                                                                                                        if (
-                                                                                                                                                !row.onlyShowLoggedIn
-                                                                                                                                        )
-                                                                                                                                                req.io
-                                                                                                                                                        .to(
-                                                                                                                                                                'anonymous'
-                                                                                                                                                        )
-                                                                                                                                                        .emit(
-                                                                                                                                                                'messagePost',
-                                                                                                                                                                rowUser
-                                                                                                                                                        );
-                                                                                                                                }
-                                                                                                                        }
-                                                                                                                );
-                                                                                                        }
-                                                                                                        res.status(
-                                                                                                                200
-                                                                                                        ).send(
-                                                                                                                `${msgId}`
-                                                                                                        );
-                                                                                                })
-                                                                                                .catch(err => {
-                                                                                                        res.status(
-                                                                                                                500
-                                                                                                        ).send(err);
-                                                                                                        logger.main.error(
-                                                                                                                err
-                                                                                                        );
-                                                                                                });
-                                                                                })
-                                                                                .catch(err => {
-                                                                                        res.status(500).send(err);
-                                                                                        logger.main.error(err);
-                                                                                });
-                                                                } else {
-                                                                        res.status(200).send('Ignoring filtered');
-                                                                }
-                                                        })
-                                                        .catch(err => {
-                                                                res.status(500).send(err);
-                                                                logger.main.error(err);
-                                                        });
-                                        }
-                                })
-                                .catch(err => {
-                                        res.status(500).send(err);
-                                        logger.main.error(err);
-                                });
-                });
+                if (!pdwMode || insertedMessage.alias_id !== null) {
+                        req.io.to('admin').emit('messagePost', insertedMessage);
+                        req.io.to('user').emit('messagePost', rowUser);
+                        if (!insertedMessage.onlyShowLoggedIn) req.io.to('anonymous').emit('messagePost', rowUser);
+                } else if (insertedMessage.alias_id === null) {
+                        if (adminShow) req.io.to('admin').emit('messagePost', insertedMessage);
+                }
+
+                res.status(200).send(`${messageId}`);
         });
 
 router.route('/messages/:messageId').get(authHelper.isLoggedInMessages, async function(req, res) {

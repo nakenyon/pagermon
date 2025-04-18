@@ -30,6 +30,7 @@ beforeEach(() =>
                 .then(() => db.migrate.rollback())
                 .then(() => db.migrate.latest())
                 .then(() => db.seed.run())
+                .then(() => db.raw(`DELETE FROM protection;`))
                 .then(() => {
                         nconf.set('messages:HideSource', false);
                         nconf.set('messages:apiSecurity', false);
@@ -128,6 +129,34 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
+        it('should not login with no password provided', done => {
+                chai.request(server)
+                        .post('/auth/login')
+                        .send({
+                                username: 'useractive',
+                        })
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(401);
+                                res.body.status.should.eql('failed');
+                                res.body.error.should.eql('Check Details and try again');
+                                done();
+                        });
+        });
+        it('should not login with no username provided', done => {
+                chai.request(server)
+                        .post('/auth/login')
+                        .send({
+                                password: 'changeme2',
+                        })
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(401);
+                                res.body.status.should.eql('failed');
+                                res.body.error.should.eql('Check Details and try again');
+                                done();
+                        });
+        });
         it('should not login when user is disabled', done => {
                 chai.request(server)
                         .post('/auth/login')
@@ -143,27 +172,29 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
-        it('should return a 429 with too many invalid attempts', done => {
+        it('should return a 429 with too many invalid attempts', async () => {
+                for (let i = 0; i < 6; i += 1) {
+                        await chai
+                                .request(server)
+                                .post('/auth/login')
+                                .send({
+                                        username: 'useractive',
+                                        password: 'useractive',
+                                });
+                }
+
                 chai.request(server)
                         .post('/auth/login')
                         .send({
-                                username: 'admindisabled',
-                                password: 'changeme',
+                                username: 'useractive',
+                                password: 'useractive',
                         })
-                        .then(function() {
-                                chai.request(server)
-                                        .post('/auth/login')
-                                        .send({
-                                                username: 'admindisabled',
-                                                password: 'changeme',
-                                        })
-                                        .end((err, res) => {
-                                                should.not.exist(err);
-                                                res.status.should.eql(429);
-                                                res.body.status.should.eql('lockedout');
-                                                res.body.error.should.eql('Too many attempts, please try again later');
-                                                done();
-                                        });
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(429);
+                                res.body.status.should.eql('lockedout');
+                                res.body.error.should.eql('Too many attempts, please try again later');
+                                return Promise.resolve();
                         });
         });
 });

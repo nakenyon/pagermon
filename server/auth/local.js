@@ -27,13 +27,8 @@ passport.use(
                                 .where('username', '=', username)
                                 .first();
 
-                        if (!user) {
-                                return done(null, false);
-                        }
-
-                        if (!authHelper.comparePass(password, user.password)) {
-                                return done(null, false);
-                        }
+                        if (!user) return done(null, false);
+                        if (!authHelper.comparePass(password, user.password)) return done(null, false);
 
                         delete user.password; // Don't put the password in the session
 
@@ -51,14 +46,8 @@ passport.use(
                 const auth = nconf.get('auth');
                 const key = auth.keys.find(x => x.key === apikey);
                 // var key = auth.keys.find({ key: apikey });
-                if (key) {
-                        // do a bcrypt compare
-                        if (apikey === key.key) {
-                                return done(null, key.name);
-                        }
-                        return done(null, false);
-                }
-                return done(null, false);
+                if (!key) return done(null, false);
+                return done(null, key.name);
         })
 );
 

@@ -22,7 +22,20 @@ nconf.file({ file: confFile });
 nconf.load();
 // set required settings in config file
 
-beforeEach(() => db.migrate.rollback().then(() => db.migrate.latest().then(() => db.seed.run().then(() => {nconf.set('messages:HideSource', false); nconf.set('messages:apiSecurity', false); nconf.set('messages:HideCapcode', false)}))));
+beforeEach(() =>
+        db
+                .raw(
+                        `PRAGMA writable_schema = 1; delete from sqlite_master where type in ('table', 'index', 'trigger'); PRAGMA writable_schema = 0;`
+                )
+                .then(() => db.migrate.rollback())
+                .then(() => db.migrate.latest())
+                .then(() => db.seed.run())
+                .then(() => {
+                        nconf.set('messages:HideSource', false);
+                        nconf.set('messages:apiSecurity', false);
+                        nconf.set('messages:HideCapcode', false);
+                })
+);
 
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 

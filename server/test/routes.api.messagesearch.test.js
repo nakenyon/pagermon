@@ -22,17 +22,24 @@ const db = require('../knex/knex.js');
 passportStub.install(server);
 // set required settings in config file
 
-// Force someconfigs back to default
-nconf.set('messages:HideCapcode', false);
-nconf.set('messages:HideSource', false);
-nconf.set('messages:apiSecurity', false);
-nconf.save();
-
-beforeEach(() => db.migrate.rollback().then(() => db.migrate.latest().then(() => db.seed.run().then(() => {nconf.set('messages:HideSource', false); nconf.set('messages:apiSecurity', false); nconf.set('messages:HideCapcode', false)}))));
+beforeEach(() =>
+        db
+                .raw(
+                        `PRAGMA writable_schema = 1; delete from sqlite_master where type in ('table', 'index', 'trigger'); PRAGMA writable_schema = 0;`
+                )
+                .then(() => db.migrate.rollback())
+                .then(() => db.migrate.latest())
+                .then(() => db.seed.run())
+                .then(() => {
+                        nconf.set('messages:HideSource', false);
+                        nconf.set('messages:apiSecurity', false);
+                        nconf.set('messages:HideCapcode', false);
+                })
+);
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /api/messageSearch', () => {
-        it('should return result for existing term', (done) => {
+        it('should return result for existing term', done => {
                 chai.request(server)
                         .get('/api/messageSearch?q=test')
                         .end((err, res) => {
@@ -49,7 +56,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for non-existing term', (done) => {
+        it('should not return result for non-existing term', done => {
                 chai.request(server)
                         .get('/api/messageSearch?q=thisisnotmessage')
                         .end((err, res) => {
@@ -61,7 +68,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should return result for existing alias', (done) => {
+        it('should return result for existing alias', done => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=1')
                         .end((err, res) => {
@@ -80,7 +87,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should return result for message missing alias', (done) => {
+        it('should return result for message missing alias', done => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=-1')
                         .end((err, res) => {
@@ -96,7 +103,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for alias with no messages', (done) => {
+        it('should not return result for alias with no messages', done => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=4')
                         .end((err, res) => {
@@ -108,7 +115,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for non-existing alias', (done) => {
+        it('should not return result for non-existing alias', done => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=18')
                         .end((err, res) => {
@@ -120,7 +127,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should return result for existing address', (done) => {
+        it('should return result for existing address', done => {
                 chai.request(server)
                         .get('/api/messageSearch?address=1234569')
                         .end((err, res) => {
@@ -137,7 +144,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for non-existing address', (done) => {
+        it('should not return result for non-existing address', done => {
                 chai.request(server)
                         .get('/api/messageSearch?address=1234585')
                         .end((err, res) => {

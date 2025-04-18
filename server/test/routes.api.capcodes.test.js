@@ -1,6 +1,7 @@
 process.env.NODE_ENV = 'test';
 
 const chai = require('chai');
+const _ = require('underscore');
 
 const should = chai.should();
 const chaiHttp = require('chai-http');
@@ -25,8 +26,11 @@ passportStub.install(server);
 // set required settings in config file
 
 beforeEach(() =>
-        db.migrate
-                .rollback()
+        db
+                .raw(
+                        `PRAGMA writable_schema = 1; delete from sqlite_master where type in ('table', 'index', 'trigger'); PRAGMA writable_schema = 0;`
+                )
+                .then(() => db.migrate.rollback())
                 .then(() => db.migrate.latest())
                 .then(() => db.seed.run())
                 .then(() => {
@@ -84,7 +88,7 @@ describe('GET /api/capcodes', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -94,7 +98,7 @@ describe('GET /api/capcodes', () => {
                         .get('/api/capcodes')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -133,9 +137,9 @@ describe('POST /api/capcodes', () => {
                         id: 1,
                         address: '12345672',
                         alias: 'Newly updated',
-                        agency: 'FIRE',
-                        icon: 'fire',
-                        color: 'red',
+                        agency: 'UPDATED',
+                        icon: 'updated',
+                        color: 'updated',
                         pluginconf: {
                                 plugin1: {
                                         enabled: true,
@@ -215,9 +219,9 @@ describe('POST /api/capcodes', () => {
                         id: 1,
                         address: '12345672',
                         alias: 'Newly updated',
-                        agency: 'FIRE',
-                        icon: 'fire',
-                        color: 'red',
+                        agency: 'UPDATED',
+                        icon: 'updated',
+                        color: 'updated',
                         pluginconf: {
                                 plugin1: {
                                         enabled: true,
@@ -282,6 +286,111 @@ describe('POST /api/capcodes', () => {
                                         });
                         });
         });
+        it('should return a 403 when not admin', done => {
+                passportStub.login({
+                        username: 'useractive',
+                        password: 'changeme',
+                        role: 'user',
+                });
+                const capcode = {
+                        id: 1,
+                        address: '12345672',
+                        alias: 'Newly updated',
+                        agency: 'UPDATED',
+                        icon: 'updated',
+                        color: 'updated',
+                        pluginconf: {
+                                plugin1: {
+                                        enabled: true,
+                                        config: {
+                                                setting1: 'value1',
+                                                setting2: 'value2',
+                                        },
+                                },
+                                plugin2: {},
+                        },
+                        ignore: 0,
+                        onlyShowLoggedIn: false,
+                };
+                chai.request(server)
+                        .post('/api/capcodes')
+                        .send(capcode)
+                        .end((postErr, postRes) => {
+                                postRes.status.should.eql(403);
+                                postRes.type.should.eql('application/json');
+                                passportStub.login({
+                                        username: 'adminactive',
+                                        password: 'changeme',
+                                        role: 'admin',
+                                });
+
+                                chai.request(server)
+                                        .get(`/api/capcodes/${capcode.id}`)
+                                        .end((getErr, getRes) => {
+                                                getRes.status.should.eql(200);
+                                                getRes.type.should.eql('application/json');
+                                                getRes.body.should.be.a('object');
+                                                getRes.body.should.have.property('id');
+                                                getRes.body.id.should.eql(capcode.id);
+                                                getRes.body.should.not.satisfy(retCapcode => {
+                                                        delete capcode.pluginconf;
+                                                        const comparator = _.pick(retCapcode, Object.keys(capcode));
+                                                        return _.isEqual(comparator, capcode);
+                                                });
+                                                done();
+                                        });
+                        });
+        });
+        it('should not update a capcode when not logged in', done => {
+                const capcode = {
+                        id: 1,
+                        address: '12345672',
+                        alias: 'Newly updated',
+                        agency: 'UPDATED',
+                        icon: 'updated',
+                        color: 'updated',
+                        pluginconf: {
+                                plugin1: {
+                                        enabled: true,
+                                        config: {
+                                                setting1: 'value1',
+                                                setting2: 'value2',
+                                        },
+                                },
+                                plugin2: {},
+                        },
+                        ignore: 0,
+                        onlyShowLoggedIn: false,
+                };
+                chai.request(server)
+                        .post('/api/capcodes')
+                        .send(capcode)
+                        .end((postErr, postRes) => {
+                                postRes.status.should.eql(401);
+                                postRes.type.should.eql('application/json');
+                                passportStub.login({
+                                        username: 'adminactive',
+                                        password: 'changeme',
+                                        role: 'admin',
+                                });
+
+                                chai.request(server)
+                                        .get(`/api/capcodes/${capcode.id}`)
+                                        .end((getErr, getRes) => {
+                                                getRes.status.should.eql(200);
+                                                getRes.type.should.eql('application/json');
+                                                getRes.body.should.be.a('object');
+                                                getRes.body.should.have.property('id');
+                                                getRes.body.id.should.eql(capcode.id);
+                                                getRes.body.should.not.satisfy(retCapcode => {
+                                                        delete capcode.pluginconf;
+                                                        const comparator = _.pick(retCapcode, Object.keys(capcode));
+                                                        return _.isEqual(comparator, capcode);
+                                                });
+                                                done();
+                                        });
+                        });
+        });
         it('should create a new capcode when logged in as admin', done => {
                 passportStub.login({
                         username: 'adminactive',
@@ -289,11 +398,11 @@ describe('POST /api/capcodes', () => {
                         role: 'admin',
                 });
                 const capcode = {
-                        address: '12345672',
-                        alias: 'Newly updated',
-                        agency: 'FIRE',
-                        icon: 'fire',
-                        color: 'red',
+                        address: '12345673',
+                        alias: 'Newly created',
+                        agency: 'CREATED',
+                        icon: 'CREATED',
+                        color: 'CREATED',
                         pluginconf: {
                                 plugin1: {
                                         enabled: true,
@@ -371,11 +480,11 @@ describe('POST /api/capcodes', () => {
                 ]);
                 nconf.save();
                 const capcode = {
-                        address: '12345672',
-                        alias: 'Newly updated',
-                        agency: 'FIRE',
-                        icon: 'fire',
-                        color: 'red',
+                        address: '12345673',
+                        alias: 'Newly created',
+                        agency: 'CREATED',
+                        icon: 'CREATED',
+                        color: 'CREATED',
                         pluginconf: {
                                 plugin1: {
                                         enabled: true,
@@ -437,6 +546,110 @@ describe('POST /api/capcodes', () => {
                                                         // eslint-disable-next-line eqeqeq
                                                         val => val == capcode.onlyShowLoggedIn
                                                 );
+                                                done();
+                                        });
+                        });
+        });
+        it('should not create a new capcode when logged in as user', done => {
+                passportStub.login({
+                        username: 'useractive',
+                        password: 'changeme',
+                        role: 'user',
+                });
+                const capcode = {
+                        address: '12345673',
+                        alias: 'Newly created',
+                        agency: 'CREATED',
+                        icon: 'CREATED',
+                        color: 'CREATED',
+                        pluginconf: {
+                                plugin1: {
+                                        enabled: true,
+                                        config: {
+                                                setting1: 'value1',
+                                                setting2: 'value2',
+                                        },
+                                },
+                                plugin2: {},
+                        },
+                        ignore: 0,
+                        onlyShowLoggedIn: false,
+                };
+                chai.request(server)
+                        .post('/api/capcodes')
+                        .send(capcode)
+                        .end((postErr, postRes) => {
+                                postRes.status.should.eql(403);
+                                postRes.type.should.eql('application/json');
+                                passportStub.login({
+                                        username: 'adminactive',
+                                        password: 'changeme',
+                                        role: 'admin',
+                                });
+
+                                chai.request(server)
+                                        .get(`/api/capcodes`)
+                                        .end((getErr, getRes) => {
+                                                getRes.status.should.eql(200);
+                                                getRes.type.should.eql('application/json');
+                                                getRes.body.should.be.a('array');
+                                                // Prüfe, dass in dem Array kein Capcode enthalten ist, der eine Übereinstimmung mit dem gesendeten Capcode hat, die ID darf jedoch abweichen
+                                                getRes.body.should.not.satisfy(retCapcode => {
+                                                        delete capcode.pluginconf;
+                                                        const comparator = _.pick(retCapcode, Object.keys(capcode));
+                                                        return _.isEqual(comparator, capcode);
+                                                });
+
+                                                done();
+                                        });
+                        });
+        });
+        it('should not create a new capcode when not logged in', done => {
+                const capcode = {
+                        address: '12345673',
+                        alias: 'Newly created',
+                        agency: 'CREATED',
+                        icon: 'CREATED',
+                        color: 'CREATED',
+                        pluginconf: {
+                                plugin1: {
+                                        enabled: true,
+                                        config: {
+                                                setting1: 'value1',
+                                                setting2: 'value2',
+                                        },
+                                },
+                                plugin2: {},
+                        },
+                        ignore: 0,
+                        onlyShowLoggedIn: false,
+                };
+                chai.request(server)
+                        .post('/api/capcodes')
+                        .send(capcode)
+                        .end((postErr, postRes) => {
+                                postRes.status.should.eql(401);
+                                postRes.type.should.eql('application/json');
+
+                                passportStub.login({
+                                        username: 'adminactive',
+                                        password: 'changeme',
+                                        role: 'admin',
+                                });
+
+                                chai.request(server)
+                                        .get(`/api/capcodes/`)
+                                        .end((getErr, getRes) => {
+                                                getRes.status.should.eql(200);
+                                                getRes.type.should.eql('application/json');
+                                                getRes.body.should.be.a('array');
+                                                // Prüfe, dass in dem Array kein Capcode enthalten ist, der eine Übereinstimmung mit dem gesendeten Capcode hat, die ID darf jedoch abweichen
+                                                getRes.body.should.not.satisfy(retCapcode => {
+                                                        delete capcode.pluginconf;
+                                                        const comparator = _.pick(retCapcode, Object.keys(capcode));
+                                                        return _.isEqual(comparator, capcode);
+                                                });
+
                                                 done();
                                         });
                         });
@@ -556,7 +769,7 @@ describe('GET /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -566,7 +779,7 @@ describe('GET /api/capcodes/:id', () => {
                         .get('/api/capcodes/2')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -621,7 +834,7 @@ describe('DELETE /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -631,7 +844,7 @@ describe('DELETE /api/capcodes/:id', () => {
                         .delete('/api/capcodes/2')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -692,7 +905,7 @@ describe('GET /api/capcodes/agency', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -702,7 +915,7 @@ describe('GET /api/capcodes/agency', () => {
                         .get('/api/capcodes/agency')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -791,7 +1004,7 @@ describe('GET /api/capcodes/agency/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -801,7 +1014,7 @@ describe('GET /api/capcodes/agency/:id', () => {
                         .get('/api/capcodes/agency/FIRE')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -942,7 +1155,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -952,7 +1165,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                         .get('/api/capcodeCheck/1234567')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -1009,7 +1222,7 @@ describe('POST /api/capcodeRefresh', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1019,7 +1232,7 @@ describe('POST /api/capcodeRefresh', () => {
                         .post('/api/capcodeRefresh')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -1065,7 +1278,7 @@ describe('POST /api/capcodeExport', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not admin', done => {
+        it('should return a 403 when not admin', done => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1075,7 +1288,7 @@ describe('POST /api/capcodeExport', () => {
                         .post('/api/capcodeExport')
                         .end((err, res) => {
                                 should.not.exist(err);
-                                res.status.should.eql(401);
+                                res.status.should.eql(403);
                                 res.type.should.eql('application/json');
                                 done();
                         });

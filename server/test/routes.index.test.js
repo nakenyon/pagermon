@@ -21,7 +21,20 @@ passportStub.install(server);
 nconf.file({ file: confFile });
 nconf.load();
 
-beforeEach(() => db.migrate.rollback().then(() => db.migrate.latest().then(() => db.seed.run().then(() => {nconf.set('messages:HideSource', false); nconf.set('messages:apiSecurity', false); nconf.set('messages:HideCapcode', false)}))));
+beforeEach(() =>
+        db
+                .raw(
+                        `PRAGMA writable_schema = 1; delete from sqlite_master where type in ('table', 'index', 'trigger'); PRAGMA writable_schema = 0;`
+                )
+                .then(() => db.migrate.rollback())
+                .then(() => db.migrate.latest())
+                .then(() => db.seed.run())
+                .then(() => {
+                        nconf.set('messages:HideSource', false);
+                        nconf.set('messages:apiSecurity', false);
+                        nconf.set('messages:HideCapcode', false);
+                })
+);
 
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
@@ -39,7 +52,7 @@ describe('GET /', () => {
                         });
         });
         // res.redirect is causing an ECONNRESET in this version of Express here, nfi why but i give up. @Danrw
-        /*it('should return the login if a user is not logged in and apiSecurity enabled', done => {
+        /* it('should return the login if a user is not logged in and apiSecurity enabled', done => {
                 nconf.set('messages:apiSecurity', true);
                 nconf.save();
                 chai.request(server)
@@ -53,7 +66,7 @@ describe('GET /', () => {
                                 nconf.save();
                                 done();
                         });
-        });*/
+        }); */
         it('should return the index if a user is logged in and apiSecurity enabled', done => {
                 nconf.set('messages:apiSecurity', true);
                 nconf.save();

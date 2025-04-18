@@ -23,29 +23,27 @@ var server = require('../app');
 const db = require('../knex/knex.js');
 // This needs to be sorted out, use a different config file when testing?
 
-// Force someconfigs back to default
-nconf.set('messages:HideCapcode', false);
-nconf.set('messages:HideSource', false);
-nconf.set('messages:apiSecurity', false);
-nconf.save();
 
 passportStub.install(server);
 // set required settings in config file
-
 beforeEach(() =>
-        db.migrate.rollback().then(() =>
-                db.migrate.latest().then(() =>
-                        db.seed.run().then(() => {
-                                nconf.set('messages:HideSource', false);
-                                nconf.set('messages:apiSecurity', false);
-                                nconf.set('messages:HideCapcode', false);
-                                nconf.set('messages:duplicateTime', 0);
-                                nconf.set('messages:duplicateLimit', 0);
-                                nconf.set('messages:duplicateFiltering', true);
-                        })
+        db
+                .raw(
+                        `PRAGMA writable_schema = 1; delete from sqlite_master where type in ('table', 'index', 'trigger'); PRAGMA writable_schema = 0;`
                 )
-        )
+                .then(() => db.migrate.rollback())
+                .then(() => db.migrate.latest())
+                .then(() => db.seed.run())
+                .then(() => {
+                        nconf.set('messages:HideSource', false);
+                        nconf.set('messages:apiSecurity', false);
+                        nconf.set('messages:HideCapcode', false);
+                        nconf.set('messages:duplicateTime', 0);
+                        nconf.set('messages:duplicateLimit', 0);
+                        nconf.set('messages:duplicateFiltering', true);
+                })
 );
+
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('POST /api/messages', () => {

@@ -46,7 +46,7 @@ function isAdminGUI(req, res, next) {
 
 function isAdmin(req, res, next) {
         const passport = require('../auth/local');
-        if (!req.isAuthenticated() || req.user.role !== 'admin')
+        if (!req.isAuthenticated())
                 return (
                         passport.authenticate('login-api', { session: false, failWithError: true })(req, res, next),
                         function(next) {
@@ -56,6 +56,10 @@ function isAdmin(req, res, next) {
                                 return res.status(401).json({ error: 'Authentication failed.' });
                         }
                 );
+        if (req.user.role !== 'admin') {
+                return res.status(403).json({ error: 'Authentication failed.' });
+        }
+        // if user is authenticated in the session, carry on
         return next();
 }
 

@@ -93,43 +93,6 @@ router.route('/capcodes')
 
 
 router.route('/capcodes/:id')
-  .get(authHelper.isAdmin, function (req, res, next) {
-    var id = req.params.id;
-    var defaults = {
-      "id": "",
-      "address": "",
-      "alias": "",
-      "agency": "",
-      "icon": "question",
-      "color": "black",
-      "ignore": 0,
-      "pluginconf": {},
-      "onlyShowLoggedIn": false,
-    };
-    if (id == 'new') {
-      res.status(200);
-      res.json(defaults);
-    } else {
-      db.from('capcodes')
-        .select('*')
-        .where('id', id)
-        .then(function (row) {
-          if (row.length > 0) {
-            row = row[0]
-            row.pluginconf = parseJSON(row.pluginconf);
-            res.status(200);
-            res.json(row);
-          } else {
-            res.status(200);
-            res.json(defaults);
-          }
-        })
-        .catch((err) => {
-          logger.main.error(err);
-          return next(err);
-        })
-    }
-  })
   .post(authHelper.isAdmin, function (req, res, next) {
     var dbtype = nconf.get('database:type');
     var id = req.params.id || req.body.id || null;

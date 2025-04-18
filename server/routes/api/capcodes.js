@@ -35,6 +35,47 @@ router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(
         res.json(capcodes);
 });
 
+router.route('/capcodes/:id').get(authHelper.isAdmin, async function(req, res, next) {
+        const { id } = req.params;
+        const defaults = {
+                id: '',
+                address: '',
+                alias: '',
+                agency: '',
+                icon: 'question',
+                color: 'black',
+                ignore: 0,
+                pluginconf: {},
+                onlyShowLoggedIn: false,
+        };
+        if (id === 'new') {
+                return res.json(defaults);
+        }
+        const capcode = await db
+                .from('capcodes')
+                .select('*')
+                .where({ id })
+                .first();
+
+        if (!capcode) {
+                // TODO: I think this should be a 404, but the old code returns 200
+                return res.status(200).json({
+                        id: '',
+                        address: '',
+                        alias: '',
+                        agency: '',
+                        icon: 'question',
+                        color: 'black',
+                        ignore: 0,
+                        pluginconf: {},
+                        onlyShowLoggedIn: false,
+                });
+        }
+
+        capcode.pluginconf = parseJSON(capcode.pluginconf);
+        res.json(capcode);
+});
+
 // TODO: Get it into a helpers library
 function parseJSON(json) {
         try {

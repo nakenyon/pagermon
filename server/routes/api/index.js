@@ -1,6 +1,7 @@
 const express = require('express');
 
-const messageRouter = require('./messages');
+const messagesRouter = require('./messages');
+const capcodesRouter = require('./capcodes');
 
 const router = express.Router();
 
@@ -10,7 +11,8 @@ router.use(function(req, res, next) {
         next();
 });
 
-router.use(messageRouter);
+router.use(messagesRouter);
+router.use(capcodesRouter);
 
 function handleError(err, req, res, next) {
         var output = {

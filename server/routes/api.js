@@ -30,25 +30,6 @@ router.use(function (req, res, next) {
 
 
 router.route('/capcodes')
-  .get(authHelper.isAdmin, function (req, res, next) {
-    nconf.load();
-    var dbtype = nconf.get('database:type');
-    db.from('capcodes')
-      .select('*')
-      .modify(function (queryBuilder) {
-        if (dbtype == 'oracledb')
-          queryBuilder.orderByRaw(`REPLACE("address", '_', '%')`);
-        else
-          queryBuilder.orderByRaw(`REPLACE(address, '_', '%')`)
-      })
-      .then((rows) => {
-        res.json(rows);
-      })
-      .catch((err) => {
-        logger.main.error(err);
-        return next(err);
-      })
-  })
   .post(authHelper.isAdmin, function (req, res, next) {
     nconf.load();
     var updateRequired = nconf.get('database:aliasRefreshRequired');

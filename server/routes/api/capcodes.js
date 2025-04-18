@@ -27,8 +27,69 @@ router.route('/capcodes')
                         .select('*')
                         .orderByRaw(`REPLACE(??, ?, ?)`, ['address', '_', '%']);
 
-        res.json(capcodes);
-});
+                res.json(capcodes);
+        })
+        .post(authHelper.isAdmin, function(req, res, next) {
+                nconf.load();
+                var updateRequired = nconf.get('database:aliasRefreshRequired');
+                if (req.body.address && req.body.alias) {
+                        var id = req.body.id || null;
+                        var address = req.body.address || 0;
+                        var alias = req.body.alias || 'null';
+                        var agency = req.body.agency || 'null';
+                        var color = req.body.color || 'black';
+                        var icon = req.body.icon || 'question';
+                        var ignore = req.body.ignore || 0;
+                        const pluginconf = JSON.stringify(vaccumPluginConf(req.body.pluginconf)) || '{}';
+                        const onlyShowLoggedIn = req.body.onlyShowLoggedIn || false;
+                        db.from('capcodes')
+                                .where('id', '=', id)
+                                .modify(function(queryBuilder) {
+                                        if (id == null) {
+                                                queryBuilder.insert({
+                                                        id,
+                                                        address,
+                                                        alias,
+                                                        agency,
+                                                        color,
+                                                        icon,
+                                                        ignore,
+                                                        pluginconf,
+                                                        onlyShowLoggedIn,
+                                                });
+                                        } else {
+                                                queryBuilder.update({
+                                                        id,
+                                                        address,
+                                                        alias,
+                                                        agency,
+                                                        color,
+                                                        icon,
+                                                        ignore,
+                                                        pluginconf,
+                                                        onlyShowLoggedIn,
+                                                });
+                                        }
+                                })
+                                .returning('id')
+                                .then(result => {
+                                        res.status(200).send(`${result}`);
+                                        if (!updateRequired || updateRequired == 0) {
+                                                nconf.set('database:aliasRefreshRequired', 1);
+                                                nconf.save();
+                                        }
+                                })
+                                .catch(err => {
+                                        logger.main
+                                                .error(err)
+                                                .status(500)
+                                                .send(err);
+                                });
+                        logger.main.debug(util.format('%o', req.body || 'no request body'));
+                } else {
+                        res.status(400).json({ message: 'Error - address or alias missing' });
+                }
+        });
 
 // TODO: Should maybe better be an individual route
 router.route('/capcodes/agency').get(authHelper.isAdmin, async function(req, res, next) {

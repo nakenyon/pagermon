@@ -23,10 +23,11 @@ nconf.load();
 // set required settings in config file
 
 beforeEach(() =>
-        db
-                .raw(
-                        `PRAGMA writable_schema = 1; delete from sqlite_master where type in ('table', 'index', 'trigger'); PRAGMA writable_schema = 0;`
-                )
+        db.schema
+                .hasTable('knex_migrations_lock')
+                .then(exists => {
+                        if (exists) return db.del().from(`knex_migrations_lock`);
+                })
                 .then(() => db.migrate.rollback())
                 .then(() => db.migrate.latest())
                 .then(() => db.seed.run())

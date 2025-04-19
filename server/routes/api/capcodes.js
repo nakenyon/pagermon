@@ -67,11 +67,11 @@ router.route('/capcodes')
 
                 res.json(capcodes);
         })
-        .post(authHelper.isAdmin, async function(req, res) {
+        .post(authHelper.isAdmin, async function(req, res, next) {
                 if (!req.body.address || !req.body.alias) {
                         const error = new Error('Error - address or alias missing');
                         error.status = 400;
-                        throw error;
+                        return next(error);
                 }
 
                 const capcode = _.pick(req.body, [

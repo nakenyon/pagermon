@@ -140,7 +140,7 @@ function getMessageQuery(req) {
 const router = express.Router();
 
 router.route('/messages')
-        .get(authHelper.isLoggedInMessages, async function(req, res) {
+        .get(authHelper.isLoggedInMessages, async function(req, res, next) {
                 const HideCapcode = nconf.get('messages:HideCapcode');
 
                 const maxLimit = nconf.get('messages:maxLimit');
@@ -169,7 +169,7 @@ router.route('/messages')
                 const initCount = await getMessageQuery(req).count('* as msgcount');
 
                 const count = initCount[0].msgcount;
-                if (count === undefined) throw new Error('Something went really really wrong!'); // TODO: How the fuck would we end up in this situation?
+                if (count === undefined) return next(new Error('Something went really really wrong!')); // TODO: How the fuck would we end up in this situation?
 
                 initData.msgCount = count;
 

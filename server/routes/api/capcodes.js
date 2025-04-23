@@ -5,6 +5,7 @@ const { InvalidRequestError } = require('../../helpers/errors');
 const db = require('../../knex/knex');
 const authHelper = require('../../middleware/authhelper');
 const logger = require('../../log');
+const nconf = require('nconf');
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ const router = express.Router();
 async function modifyCapcode(capcode) {
         const pluginConfig = capcode.pluginconf;
         capcode.pluginconf = JSON.stringify(vaccumPluginConf(capcode.pluginconf)) || '{}';
-        const update = typeof capcode.id === 'number';
+        const update = typeof capcode?.id === 'number';
 
         const insertion = _.defaults(capcode, {
                 address: '',
@@ -57,72 +58,31 @@ async function modifyCapcode(capcode) {
         // TODO: Capcode update!
 }
 
-router.route('/capcodes')
-        .get(authHelper.isAdmin, async function(req, res, next) {
-                try {
-                        const capcodes = await db
+/**
+ * Refreshes all messages-to-capcode relations in the database.
+ * @param {Object} filter The filter object to use for the refresh. All filters are combined with OR!
+ * @param {string[]} filter.addresses The addresses that messages must match in order to be updated
+ * @param {number[]} filter.ids The ids of the capcodes whose messages must be refreshed
+ * @returns {Promise} A promise that resolves when the alias refresh is complete
+ */
+function performAliasRefresh(filter) {
+        return db('messages')
+                .modify(qb => {
+                        if (filter?.addresses)
+                                filter.addresses.forEach(address => {
+                                        qb.orWhere('messages.address', 'like', address);
+                                });
+
+                        if (filter?.ids) qb.orWhereIn('capcodes.id', filter.ids);
+                })
+                .update('alias_id', function() {
+                        this.select('id')
                                 .from('capcodes')
-                                .select('*')
-                                .orderByRaw(`REPLACE(??, ?, ?)`, ['address', '_', '%']);
-
-                        res.json(capcodes);
-                } catch (e) {
-                        next(e);
-                }
-        })
-        .post(authHelper.isAdmin, async function(req, res, next) {
-                try {
-                        if (!req.body.address || !req.body.alias) {
-                                throw new InvalidRequestError('Error - address or alias missing');
-                        }
-
-                        const capcode = _.pick(req.body, [
-                                'id',
-                                'address',
-                                'alias',
-                                'agency',
-                                'color',
-                                'icon',
-                                'ignore',
-                                'pluginconf',
-                                'onlyShowLoggedIn',
-                        ]);
-
-                        const inserted = await modifyCapcode(capcode);
-
-                        res.json(inserted);
-                } catch (e) {
-                        next(e);
-                }
-        });
-
-// TODO: Should maybe better be an individual route
-router.route('/capcodes/agency').get(authHelper.isAdmin, async function(req, res, next) {
-        try {
-                const agencies = await db.from('capcodes').distinct('agency');
-                res.json(agencies);
-        } catch (e) {
-                next(e);
-        }
-});
-
-router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(req, res, next) {
-        try {
-                const { agency } = req.params;
-                const capcodes = (
-                        await db
-                                .from('capcodes')
-                                .select('*')
-                                .where({ agency })
-                ).map(capcode => {
-                        capcode.pluginconf = parseJSON(capcode.pluginconf);
-                        return capcode;
+                                .where('messages.address', 'like', 'capcodes.address')
+                                .orderByRaw(`REPLACE(??, '_', '%') DESC`, 'capcodes.address')
+                                .limit(1);
                 });
-                res.json(capcodes);
-        } catch (e) {
-                next(e);
-        }
-});
+}
 
 /**
  * Returns a single capcode object from the database
@@ -158,14 +118,168 @@ async function getSingleCapcode(filter) {
         return capcode;
 }
 
-router.route('/capcodes/:id').get(authHelper.isAdmin, async function(req, res, next) {
+router.route('/capcodes')
+        .get(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        const capcodes = await db
+                                .from('capcodes')
+                                .select('*')
+                                .orderByRaw(`REPLACE(??, ?, ?)`, ['address', '_', '%']);
+
+                        res.json(capcodes);
+                } catch (e) {
+                        next(e);
+                }
+        })
+        .post(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        if (!req.body.address || !req.body.alias) {
+                                throw new InvalidRequestError('Error - address or alias missing');
+                        }
+                        const id = req.body.id || null;
+
+                        const capcode = _.pick(req.body, [
+                                'address',
+                                'alias',
+                                'agency',
+                                'color',
+                                'icon',
+                                'ignore',
+                                'pluginconf',
+                                'onlyShowLoggedIn',
+                        ]);
+
+                        const filter = {
+                                addresses: [req.body.address],
+                        };
+
+                        if (id !== 'new' && id !== null) {
+                                capcode.id = id;
+                                filter.ids = [id];
+
+                                const oldCapcode = await getSingleCapcode({ id });
+                                filter.addresses.push(oldCapcode.address);
+                        }
+
+                        const inserted = await modifyCapcode(capcode);
+
+                        // Check if we can refresh just this specific alias
+                        const specificRefresh = nconf.get('global:SpecificAliasRefresh');
+                        if (specificRefresh) {
+                                performAliasRefresh(filter).then();
+                        } else {
+                                // We cannot update this specific Alias, so inform of required Alias Refresh
+                                nconf.set('database:aliasRefreshRequired', 1);
+                                nconf.save();
+                        }
+
+                        res.json(inserted); // TODO: consistency to POST /capcodes/:id
+                } catch (e) {
+                        next(e);
+                }
+        });
+
+// TODO: Should maybe better be an individual route
+router.route('/capcodes/agency').get(authHelper.isAdmin, async function(req, res, next) {
         try {
-                const { id } = req.params;
-                res.json(await getSingleCapcode(id === 'new' ? false : { id }));
+                const agencies = await db.from('capcodes').distinct('agency');
+                res.json(agencies);
         } catch (e) {
                 next(e);
         }
 });
+
+router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(req, res, next) {
+        try {
+                const { agency } = req.params;
+                const capcodes = (
+                        await db
+                                .from('capcodes')
+                                .select('*')
+                                .where({ agency })
+                ).map(capcode => {
+                        capcode.pluginconf = parseJSON(capcode.pluginconf);
+                        return capcode;
+                });
+                res.json(capcodes);
+        } catch (e) {
+                next(e);
+        }
+});
+
+router.route('/capcodes/:id')
+        .get(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        const { id } = req.params;
+                        res.json(await getSingleCapcode(id === 'new' ? false : { id }));
+                } catch (e) {
+                        next(e);
+                }
+        })
+        .post(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        const id = req.params.id || req.body.id || null;
+                        const updateAlias = req.body.updateAlias || 0; // TODO: We don't seem to set this anywhere. Seems like it would be better to check if the alias exists instead
+
+                        if (id === 'deleteMultiple') {
+                                const idList = req.body.deleteList;
+                                if (idList.length === 0) throw InvalidRequestError('Error - no ids to delete');
+                                if (idList.some(Number.isNaN))
+                                        throw InvalidRequestError('Error - id list contained non-numbers');
+
+                                logger.main.info(`Deleting: ${idList}`);
+                                await db
+                                        .from('capcodes')
+                                        .del()
+                                        .where('id', 'in', idList);
+
+                                nconf.set('database:aliasRefreshRequired', 1);
+                                nconf.save();
+
+                                return res.status(200).send({ status: 'ok' });
+                        }
+                        if (!req.body.addres || !req.body.alias)
+                                throw new InvalidRequestError('Error - address or alias missing');
+
+                        const capcode = _.pick(req.body, [
+                                'address',
+                                'alias',
+                                'agency',
+                                'color',
+                                'icon',
+                                'ignore',
+                                'pluginconf',
+                                'onlyShowLoggedIn',
+                        ]);
+
+                        const filter = {
+                                addresses: [req.body.address],
+                        };
+
+                        if (id !== 'new' && id !== null) {
+                                capcode.id = id;
+                                filter.ids = [id];
+
+                                const oldCapcode = await getSingleCapcode({ id });
+                                filter.addresses.push(oldCapcode.address);
+                        }
+
+                        const inserted = await modifyCapcode(capcode);
+
+                        if (updateAlias === 1) {
+                                performAliasRefresh().then();
+                        } else if (nconf.get('global:SpecificAliasRefresh')) {
+                                performAliasRefresh(filter).then();
+                        } else {
+                                // We cannot update this specific Alias, so inform of required Alias Refresh
+                                nconf.set('database:aliasRefreshRequired', 1);
+                                nconf.save();
+                        }
+                        res.status(200).send({ status: 'ok', id: inserted.id }); // TODO: consistency to POST /capcodes/
+                } catch (e) {
+                        next(e);
+                }
+        });
 
 router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(req, res, next) {
         try {

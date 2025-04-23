@@ -221,6 +221,7 @@ router.route('/capcodes/:id')
                         const id = req.params.id || req.body.id || null;
                         const updateAlias = req.body.updateAlias || 0; // TODO: We don't seem to set this anywhere. Seems like it would be better to check if the alias exists instead
 
+                        // TODO: Deleting should not be a POST request, but a DELETE request
                         if (id === 'deleteMultiple') {
                                 const idList = req.body.deleteList;
                                 if (idList.length === 0) throw InvalidRequestError('Error - no ids to delete');

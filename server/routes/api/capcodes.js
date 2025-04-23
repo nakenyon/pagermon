@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-globals */
 const express = require('express');
 const _ = require('underscore');
 const { InvalidRequestError, RequiredFieldMissingError, ResourceNotFoundError } = require('../../helpers/errors');
@@ -272,9 +273,9 @@ router.route('/capcodes/:id')
                         // TODO: Deleting should not be a POST request, but a DELETE request
                         if (id === 'deleteMultiple') {
                                 const idList = req.body.deleteList;
-                                if (idList.length === 0) throw InvalidRequestError('Error - no ids to delete');
-                                if (idList.some(Number.isNaN))
-                                        throw InvalidRequestError('Error - id list contained non-numbers');
+                                if (idList.length === 0) throw RequiredFieldMissingError('deleteList entries');
+                                if (idList.some(isNaN))
+                                        throw InvalidRequestError('Id list contained non-numbers');
 
                                 logger.main.info(`Deleting: ${idList}`);
                                 await db

@@ -471,8 +471,7 @@ describe('POST /api/user/:id', () => {
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(400);
-                                res.body.status.should.eql('error');
-                                res.body.error.should.eql('Error - required field missing');
+                                res.body.error.name.should.eql('RequiredFieldMissingError');
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -495,8 +494,7 @@ describe('POST /api/user/:id', () => {
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(400);
-                                res.body.status.should.eql('error');
-                                res.body.error.should.eql('Error - required field missing');
+                                res.body.error.name.should.eql('RequiredFieldMissingError');
                                 res.type.should.eql('application/json');
                                 done();
                         });
@@ -623,8 +621,7 @@ describe('POST /api/user/:id', () => {
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(400);
-                                res.body.status.should.eql('error');
-                                res.body.error.should.eql('id list contained non-numbers');
+                                res.body.error.name.should.eql('InvalidRequestError');
                                 res.type.should.eql('application/json');
                                 done();
                         });

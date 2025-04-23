@@ -28,32 +28,6 @@ router.use(function (req, res, next) {
   next();
 });
 
-
-
-
-router.route('/capcodes/:id')
-  .delete(authHelper.isAdmin, function (req, res, next) {
-    // delete single alias
-    var id = parseInt(req.params.id, 10);
-    nconf.load();
-    var updateRequired = nconf.get('database:aliasRefreshRequired');
-    logger.main.info('Deleting ' + id);
-    db.from('capcodes')
-      .del()
-      .where('id', id)
-      .then((result) => {
-        res.status(200).send({ 'status': 'ok' });
-        if (!updateRequired || updateRequired == 0) {
-          nconf.set('database:aliasRefreshRequired', 1);
-          nconf.save();
-        }
-      })
-      .catch((err) => {
-        res.status(500).send(err);
-      })
-    logger.main.debug(util.format('%o', req.body || 'request body empty'));
-  });
-
 router.route('/capcodeRefresh')
   .post(authHelper.isAdmin, function (req, res, next) {
     nconf.load();

@@ -280,6 +280,27 @@ router.route('/capcodes/:id')
                 } catch (e) {
                         next(e);
                 }
+        })
+        .delete(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        if (!req.params.id) throw new RequiredFieldMissingError('capcode id');
+                        const { id } = req.params;
+                        logger.main.debug(`Deleting capcode ${id}`);
+
+                        const capcode = await getSingleCapcode({ id });
+
+                        if (!capcode) throw new ResourceNotFoundError('Capcode not found');
+
+                        await db
+                                .from('capcodes')
+                                .del()
+                                .where('id', req.params.id);
+
+                        res.status(200).send({ status: 'ok' });
+                        performCapcodeRefresh({ ids: [req.params.id], addresses: [capcode.address] }).then();
+                } catch (e) {
+                        next(e);
+                }
         });
 
 router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(req, res, next) {

@@ -65,15 +65,15 @@ async function modifyCapcode(capcode) {
  * @param {number[]} filter.ids The ids of the capcodes whose messages must be refreshed
  * @returns {Promise} A promise that resolves when the alias refresh is complete
  */
-function performAliasRefresh(filter) {
-        return db('messages')
+async function performCapcodeRefresh(filter) {
+        await db('messages')
                 .modify(qb => {
                         if (filter?.addresses)
                                 filter.addresses.forEach(address => {
                                         qb.orWhere('messages.address', 'like', address);
                                 });
 
-                        if (filter?.ids) qb.orWhereIn('capcodes.id', filter.ids);
+                        if (filter?.ids) qb.orWhereIn('messages.alias_id', filter.ids);
                 })
                 .update('alias_id', function() {
                         this.select('id')
@@ -166,7 +166,7 @@ router.route('/capcodes')
                         // Check if we can refresh just this specific alias
                         const specificRefresh = nconf.get('global:SpecificAliasRefresh');
                         if (specificRefresh) {
-                                performAliasRefresh(filter).then();
+                                performCapcodeRefresh(filter);
                         } else {
                                 // We cannot update this specific Alias, so inform of required Alias Refresh
                                 nconf.set('database:aliasRefreshRequired', 1);
@@ -267,9 +267,9 @@ router.route('/capcodes/:id')
                         const inserted = await modifyCapcode(capcode);
 
                         if (updateAlias === 1) {
-                                performAliasRefresh().then();
+                                performCapcodeRefresh();
                         } else if (nconf.get('global:SpecificAliasRefresh')) {
-                                performAliasRefresh(filter).then();
+                                performCapcodeRefresh(filter);
                         } else {
                                 // We cannot update this specific Alias, so inform of required Alias Refresh
                                 nconf.set('database:aliasRefreshRequired', 1);

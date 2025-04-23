@@ -1,5 +1,5 @@
 // pass passport for configuration
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const nconf = require('nconf');
 
 const { NotAuthenticatedError, NotAuthorizedError } = require('../helpers/errors');

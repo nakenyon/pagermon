@@ -1,6 +1,6 @@
 const express = require('express');
 const _ = require('underscore');
-const { InvalidRequestError } = require('../../helpers/errors');
+const { InvalidRequestError, RequiredFieldMissingError, ResourceNotFoundError } = require('../../helpers/errors');
 
 const db = require('../../knex/knex');
 const authHelper = require('../../middleware/authhelper');
@@ -133,9 +133,9 @@ router.route('/capcodes')
         })
         .post(authHelper.isAdmin, async function(req, res, next) {
                 try {
-                        if (!req.body.address || !req.body.alias) {
-                                throw new InvalidRequestError('Error - address or alias missing');
-                        }
+                        if (!req.body.address) throw new RequiredFieldMissingError('address');
+                        if (!req.body.alias) throw new RequiredFieldMissingError('alias');
+
                         const id = req.body.id || null;
 
                         const capcode = _.pick(req.body, [

@@ -3,7 +3,7 @@ const nconf = require('nconf');
 const util = require('util');
 const { promisify } = require('node:util');
 const _ = require('underscore');
-const { InvalidRequestError } = require('../../helpers/errors');
+const { RequiredFieldMissingError } = require('../../helpers/errors');
 
 const authHelper = require('../../middleware/authhelper');
 const db = require('../../knex/knex');
@@ -219,8 +219,8 @@ router.route('/messages')
         })
         .post(authHelper.isAdmin, async function(req, res, next) {
                 try {
-                        if (!req.body.address || !req.body.message)
-                                throw new InvalidRequestError('Missing address or message');
+                        if (!req.body.address) throw new RequiredFieldMissingError('address');
+                        if (!req.body.message) throw new RequiredFieldMissingError('message');
 
                         const dbtype = nconf.get('database:type');
 

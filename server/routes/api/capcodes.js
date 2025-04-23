@@ -6,6 +6,7 @@ const db = require('../../knex/knex');
 const authHelper = require('../../middleware/authhelper');
 const logger = require('../../log');
 const nconf = require('nconf');
+const converter = require('json-2-csv');
 
 const router = express.Router();
 
@@ -54,6 +55,27 @@ async function getSingleCapcode(filter) {
 
         capcode.pluginconf = parseJSON(capcode.pluginconf);
         return capcode;
+}
+
+/**
+ * Returns all capcode objects from the database
+ * @param {false|Object} filter If false, an empty capcode object is returned
+ * @param {string} filter.id The id of the capcode
+ * @param {string} filter.address The address of the capcode
+ * @returns {Capcode} The capcode object, an empty one if nothing was found.
+ */
+async function getAllCapcodes(modifier) {
+        const capcodes = await db
+                .from('capcodes')
+                .select('*')
+                .modify(qb => {
+                        if (modifier) modifier(qb);
+                });
+
+        return capcodes.map(capcode => {
+                capcode.pluginconf = parseJSON(capcode.pluginconf);
+                return capcode;
+        });
 }
 
 /**
@@ -340,10 +362,101 @@ router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(re
 
 // TODO: Add tests
 router.route('/capcodeRefresh').post(authHelper.isAdmin, async function(req, res, next) {
-        await performCapcodeRefresh();
-        nconf.set('database:aliasRefreshRequired', 0);
-        nconf.save();
-        res.status(200).send({ status: 'ok' });
+        try {
+                await performCapcodeRefresh();
+                nconf.set('database:aliasRefreshRequired', 0);
+                nconf.save();
+                res.status(200).send({ status: 'ok' });
+        } catch (error) {
+                next(error);
+        }
+});
+
+// TODO: This should be a GET request!
+router.route('/capcodeExport').post(authHelper.isAdmin, async function(req, res, next) {
+        try {
+                const capcodes = await getAllCapcodes(qb => {
+                        qb.orderByRaw(`REPLACE(??, ?, ?)`, ['address', '_', '%']);
+                });
+                const data = await converter.json2csv(capcodes);
+                res.send({ status: 'ok', data });
+        } catch (error) {
+                next(error);
+        }
+});
+
+// TODO: Add tests
+router.route('/capcodeImport').post(authHelper.isAdmin, async function(req, res, next) {
+        try {
+                // remove newline chars from dataset - yes i realise we are adding them in admin.main.js, it doesn't submit without them.
+                const withoutNewLines = req.body.keys.map(key => req.body[key].replace(/[\r\n]/g, ''));
+
+                // join data but remove the last newline to prevent the last one being malformed.
+                const importData = withoutNewLines.join('\n').slice(0, -1);
+
+                const data = await converter.csv2jsonAsync(importData);
+
+                // this checks if the csv has the required headings, should replace this with some form of proper validation
+                const header = data[0];
+                if (!('address' in header && 'alias' in header))
+                        throw new InvalidRequestError('Invalid CSV file provided');
+                const filter = {
+                        ids: [],
+                        addresses: [],
+                };
+
+                const importResults = await Promise.all(
+                        data.map(async capcode => {
+                                if (!capcode.address || !capcode.alias) {
+                                        return Promise.resolve({
+                                                address: capcode.address,
+                                                alias: capcode.alias,
+                                                result: 'failed - missing address or alias',
+                                        });
+                                }
+                                filter.addresses.push(capcode.address);
+
+                                const existingAlias = await db('capcodes')
+                                        .returning('id')
+                                        .where('address', '=', capcode.address)
+                                        .first();
+
+                                const operation = existingAlias ? 'updated' : 'created';
+                                if (existingAlias) {
+                                        capcode.id = existingAlias.id;
+                                        filter.addresses.push(existingAlias.address);
+                                }
+
+                                try {
+                                        const newCapcode = await modifyCapcode(capcode);
+                                        filter.ids.push(newCapcode.id);
+
+                                        return Promise.resolve({
+                                                address: capcode.address,
+                                                alias: capcode.alias,
+                                                result: operation,
+                                        });
+                                } catch (error) {
+                                        logger.main.error(
+                                                `Error while importing capcode ${capcode.address}: ${error.message}`
+                                        );
+                                        return Promise.resolve({
+                                                address: capcode.address,
+                                                alias: capcode.alias,
+                                                result: 'failed',
+                                        });
+                                }
+                        })
+                );
+
+                // Gather all the results, format for the frontend and send it back.
+                const results = { results: importResults };
+                res.json(results);
+                logger.main.debug(`Import: ${JSON.stringify(importResults)}`);
+                performCapcodeRefresh(filter);
+        } catch (error) {
+                next(error);
+        }
 });
 
 module.exports = router;

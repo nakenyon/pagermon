@@ -38,7 +38,7 @@
     "express-brute": "^1.0.1",
     "express-messages": "^1.0.1",
     "express-session": "^1.15.3",
-    "json-2-csv": "^3.6.2",
+    "json-2-csv": "5.x",
     "knex": "3.x",
     "moment": "^2.26.0",
     "morgan": "~1.9.1",

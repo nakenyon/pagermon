@@ -2,6 +2,8 @@
 const bcrypt = require('bcryptjs');
 const nconf = require('nconf');
 
+const { NotAuthenticatedError, NotAuthorizedError } = require('../helpers/errors');
+
 function isLoggedIn(req, res, next) {
         const passport = require('../auth/local');
         if (req.isAuthenticated()) {

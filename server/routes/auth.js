@@ -142,7 +142,6 @@ router.route('/profile/:id')
                 }
         })
         .post(authHelper.isLoggedIn, async function postProfileId(req, res) {
-                console.log(`POST:/auth/profile ${req.user.username} ${req.body.username}`);
                 if (req.body.username !== req.user.username) {
                         logger.auth.error('Possible attempt to compromise security POST:/auth/profile');
                         logger.auth.error(`User ${req.user.username} attempted to update ${req.body.username}`);

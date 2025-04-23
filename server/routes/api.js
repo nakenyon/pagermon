@@ -613,14 +613,18 @@ router.use([handleError]);
 module.exports = router;
 
 function handleError(err, req, res, next) {
-  var output = {
+  const output = {
     error: {
       name: err.name,
       message: err.message,
-      text: err.toString()
     }
   };
-  var statusCode = err.status || 500;
+  const statusCode = err.status || 500;
+
+  if (process.env.NODE_ENV === 'development') {
+    output.error.stack = err.stack;
+    output.error.text = err.toString();
+  }
   res.status(statusCode).json(output);
 }
 

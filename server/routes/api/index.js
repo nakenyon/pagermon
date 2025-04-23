@@ -24,12 +24,19 @@ function handleError(err, req, res, next) {
                 error: {
                         name: err.name,
                         message: err.message,
-                        text: err.toString(),
                 },
         };
+
+        // Don't show true error message to user if not in development mode. Otherwise, use original message if error is not custom or use generic message.
+        if (process.env.NODE_ENV === 'development') {
+                output.error.stack = err.stack;
+                output.error.text = err.toString();
+        } else if (!err.status) output.error.message = 'Internal Server Error';
+
         const statusCode = err.status || 500;
         res.status(statusCode).json(output);
 }
+
 router.use(handleError);
 
 module.exports = router;

@@ -1,7 +1,6 @@
 const express = require('express');
 const _ = require('underscore');
-const nconf = require('nconf');
-const util = require('util');
+const { InvalidRequestError } = require('../../helpers/errors');
 
 const db = require('../../knex/knex');
 const authHelper = require('../../middleware/authhelper');
@@ -59,56 +58,70 @@ async function modifyCapcode(capcode) {
 }
 
 router.route('/capcodes')
-        .get(authHelper.isAdmin, async function(req, res) {
-                const capcodes = await db
-                        .from('capcodes')
-                        .select('*')
-                        .orderByRaw(`REPLACE(??, ?, ?)`, ['address', '_', '%']);
+        .get(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        const capcodes = await db
+                                .from('capcodes')
+                                .select('*')
+                                .orderByRaw(`REPLACE(??, ?, ?)`, ['address', '_', '%']);
 
-                res.json(capcodes);
+                        res.json(capcodes);
+                } catch (e) {
+                        next(e);
+                }
         })
         .post(authHelper.isAdmin, async function(req, res, next) {
-                if (!req.body.address || !req.body.alias) {
-                        const error = new Error('Error - address or alias missing');
-                        error.status = 400;
-                        return next(error);
+                try {
+                        if (!req.body.address || !req.body.alias) {
+                                throw new InvalidRequestError('Error - address or alias missing');
+                        }
+
+                        const capcode = _.pick(req.body, [
+                                'id',
+                                'address',
+                                'alias',
+                                'agency',
+                                'color',
+                                'icon',
+                                'ignore',
+                                'pluginconf',
+                                'onlyShowLoggedIn',
+                        ]);
+
+                        const inserted = await modifyCapcode(capcode);
+
+                        res.json(inserted);
+                } catch (e) {
+                        next(e);
                 }
-
-                const capcode = _.pick(req.body, [
-                        'id',
-                        'address',
-                        'alias',
-                        'agency',
-                        'color',
-                        'icon',
-                        'ignore',
-                        'pluginconf',
-                        'onlyShowLoggedIn',
-                ]);
-
-                const inserted = await modifyCapcode(capcode);
-
-                res.json(inserted);
         });
 
 // TODO: Should maybe better be an individual route
 router.route('/capcodes/agency').get(authHelper.isAdmin, async function(req, res, next) {
-        const agencies = await db.from('capcodes').distinct('agency');
-        res.json(agencies);
+        try {
+                const agencies = await db.from('capcodes').distinct('agency');
+                res.json(agencies);
+        } catch (e) {
+                next(e);
+        }
 });
 
-router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(req, res) {
-        const { agency } = req.params;
-        const capcodes = (
-                await db
-                        .from('capcodes')
-                        .select('*')
-                        .where({ agency })
-        ).map(capcode => {
-                capcode.pluginconf = parseJSON(capcode.pluginconf);
-                return capcode;
-        });
-        res.json(capcodes);
+router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(req, res, next) {
+        try {
+                const { agency } = req.params;
+                const capcodes = (
+                        await db
+                                .from('capcodes')
+                                .select('*')
+                                .where({ agency })
+                ).map(capcode => {
+                        capcode.pluginconf = parseJSON(capcode.pluginconf);
+                        return capcode;
+                });
+                res.json(capcodes);
+        } catch (e) {
+                next(e);
+        }
 });
 
 /**
@@ -146,13 +159,21 @@ async function getSingleCapcode(filter) {
 }
 
 router.route('/capcodes/:id').get(authHelper.isAdmin, async function(req, res, next) {
-        const { id } = req.params;
-        res.json(await getSingleCapcode(id === 'new' ? false : { id }));
+        try {
+                const { id } = req.params;
+                res.json(await getSingleCapcode(id === 'new' ? false : { id }));
+        } catch (e) {
+                next(e);
+        }
 });
 
 router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(req, res, next) {
-        const { address } = req.params;
-        res.json(await getSingleCapcode({ address }));
+        try {
+                const { address } = req.params;
+                res.json(await getSingleCapcode({ address }));
+        } catch (e) {
+                next(e);
+        }
 });
 
 // TODO: Get it into a helpers library

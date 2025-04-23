@@ -10,6 +10,46 @@ const nconf = require('nconf');
 
 const router = express.Router();
 
+/**
+ * @typedef User
+ * @property {Number} id The user's id
+ * @property {string} username The user's unique username
+ * @property {string} givenname The user's first name
+ * @property {string} [surname] The user's last name
+ * @property {string} email The user's email address
+ * @property {"user"|"admin"} role The user's role
+ * @property {"active"|"inactive"} status The user's status
+ */
+
+/**
+ * Returns a single user object from the database
+ * @param {false|Object} filter If false, an empty user object is returned
+ * @param {User.id} filter.id The id of the user
+ * @param {User.username} filter.username The users username
+ * @returns {User} The user object, an empty one if nothing was found.
+ */
+async function getSingleUser(filter) {
+        const defaults = {
+                username: '',
+                password: '',
+                givenname: '',
+                surname: '',
+                email: '',
+                role: 'user',
+                status: 'active',
+        };
+        if (!filter) return defaults;
+
+        const filterCleaned = _.pick(filter, ['id', 'username']);
+        const user = await db
+                .from('users')
+                .select('*')
+                .where(filterCleaned)
+                .first();
+
+        return user || defaults;
+}
+
 router.route('/user')
         .get(authHelper.isAdmin, async function(req, res, next) {
                 try {
@@ -81,5 +121,24 @@ router.route('/user')
                         next(error);
                 }
         });
+
+router.route('/user/:id').get(authHelper.isAdmin, async function(req, res, next) {
+        try {
+                const { id } = req.params;
+
+                if (id === 'new') return res.json(await getSingleUser(false));
+
+                const user = await db
+                        .from('users')
+                        .select('id', 'givenname', 'surname', 'username', 'email', 'role', 'status', 'lastlogondate')
+                        .where('id', id)
+                        .first();
+                if (!user) return res.json(await getSingleUser(false));
+
+                res.json(user);
+        } catch (error) {
+                next(error);
+        }
+});
 
 module.exports = router;

@@ -91,49 +91,6 @@ router.route('/userCheck/email/:id').get(authHelper.isAdmin, function(req, res, 
 });
 
 router.route('/user/:id')
-        .get(authHelper.isAdmin, function(req, res, next) {
-                var { id } = req.params;
-                var defaults = {
-                        username: '',
-                        password: '',
-                        givenname: '',
-                        surname: '',
-                        email: '',
-                        role: 'user',
-                        status: 'active',
-                };
-                if (id == 'new') {
-                        res.status(200);
-                        res.json(defaults);
-                } else {
-                        db.from('users')
-                                .select(
-                                        'id',
-                                        'givenname',
-                                        'surname',
-                                        'username',
-                                        'email',
-                                        'role',
-                                        'status',
-                                        'lastlogondate'
-                                )
-                                .where('id', id)
-                                .then(function(row) {
-                                        if (row.length > 0) {
-                                                row = row[0];
-                                                res.status(200);
-                                                res.json(row);
-                                        } else {
-                                                res.status(200);
-                                                res.json(defaults);
-                                        }
-                                })
-                                .catch(err => {
-                                        logger.main.error(err);
-                                        return next(err);
-                                });
-                }
-        })
         .post(authHelper.isAdmin, function(req, res, next) {
                 var id = req.params.id || req.body.id || null;
                 if (id == 'deleteMultiple') {

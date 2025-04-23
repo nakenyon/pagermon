@@ -257,7 +257,7 @@ router.route('/messages')
                                 // stop processing
                                 logger.main.info(util.format('Ignoring filtered capcode: %o', data));
                                 return res.status(200).send('Ignoring filtered');
-}
+                        }
                         data.address = data.address || '0000000';
                         data.message = data.message || 'null';
                         data.source = data.source || 'UNK';

@@ -28,35 +28,6 @@ router.use(function (req, res, next) {
   next();
 });
 
-router.route('/capcodeRefresh')
-  .post(authHelper.isAdmin, function (req, res, next) {
-    nconf.load();
-    var dbtype = nconf.get('database:type');
-    console.time('updateMap');
-    db('messages').update('alias_id', function () {
-      this.select('id')
-        .from('capcodes')
-        .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
-        .modify(function (queryBuilder) {
-          if (dbtype == 'oracledb')
-            queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
-          else
-            queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`)
-        })
-        .limit(1)
-    })
-      .then((result) => {
-        console.timeEnd('updateMap');
-        nconf.set('database:aliasRefreshRequired', 0);
-        nconf.save();
-        res.status(200).send({ 'status': 'ok' });
-      })
-      .catch((err) => {
-        logger.main.error(err);
-        console.timeEnd('updateMap');
-      })
-  });
-
 router.route('/capcodeExport')
   .post(authHelper.isAdmin, function (req, res, next) {
     nconf.load();

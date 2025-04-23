@@ -23,6 +23,40 @@ const router = express.Router();
  */
 
 /**
+ * Returns a single capcode object from the database
+ * @param {false|Object} filter If false, an empty capcode object is returned
+ * @param {string} filter.id The id of the capcode
+ * @param {string} filter.address The address of the capcode
+ * @returns {Capcode} The capcode object, an empty one if nothing was found.
+ */
+async function getSingleCapcode(filter) {
+        const defaults = {
+                id: '',
+                address: '',
+                alias: '',
+                agency: '',
+                icon: 'question',
+                color: 'black',
+                ignore: 0,
+                pluginconf: {},
+                onlyShowLoggedIn: 0,
+        };
+        if (!filter) return defaults;
+
+        const filterCleaned = _.pick(filter, ['id', 'address']);
+        const capcode = await db
+                .from('capcodes')
+                .select('*')
+                .where(filterCleaned)
+                .first();
+
+        if (!capcode) return defaults;
+
+        capcode.pluginconf = parseJSON(capcode.pluginconf);
+        return capcode;
+}
+
+/**
  * Updates or creates a capcode in the database
  * @param {Capcode} capcode The capcode object to be inserted or updated
  * @returns {Capcode} The capcode object with the id set
@@ -84,38 +118,29 @@ async function performCapcodeRefresh(filter) {
                 });
 }
 
+// TODO: Get it into a helpers library
 /**
- * Returns a single capcode object from the database
- * @param {false|Object} filter If false, an empty capcode object is returned
- * @param {string} filter.id The id of the capcode
- * @param {string} filter.address The address of the capcode
- * @returns {Capcode} The capcode object, an empty one if nothing was found.
+ * Parses a JSON string and returns the object or null
+ * @param {string} json The JSON string to parse
+ * @returns {Object|null} The parsed object or null if an error occurred
  */
-async function getSingleCapcode(filter) {
-        const defaults = {
-                id: '',
-                address: '',
-                alias: '',
-                agency: '',
-                icon: 'question',
-                color: 'black',
-                ignore: 0,
-                pluginconf: {},
-                onlyShowLoggedIn: 0,
-        };
-        if (!filter) return defaults;
+function parseJSON(json) {
+        try {
+                return JSON.parse(json);
+        } catch (error) {
+                // ignore errors
+                logger.main.error(`Error while parsing json ${json}: ${error.message}`);
+        }
+}
 
-        const filterCleaned = _.pick(filter, ['id', 'address']);
-        const capcode = await db
-                .from('capcodes')
-                .select('*')
-                .where(filterCleaned)
-                .first();
-
-        if (!capcode) return defaults;
-
-        capcode.pluginconf = parseJSON(capcode.pluginconf);
-        return capcode;
+/**
+ * Removes all empty objects from a plugin configuration
+ * @param {Object} pconf An object containing a key for each Plugin, holding it's configuration
+ * @returns A sanitized version of the plugin configuration object holding only plugins with values set
+ */
+function vaccumPluginConf(pconf) {
+        const cleaned = _.pick(pconf, p => Object.keys(p).length > 0);
+        return cleaned;
 }
 
 router.route('/capcodes')
@@ -217,6 +242,7 @@ router.route('/capcodes/:id')
                 }
         })
         .post(authHelper.isAdmin, async function(req, res, next) {
+                // TODO: Add tests!
                 try {
                         const id = req.params.id || req.body.id || null;
                         const updateAlias = req.body.updateAlias || 0; // TODO: We don't seem to set this anywhere. Seems like it would be better to check if the alias exists instead
@@ -312,29 +338,12 @@ router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(re
         }
 });
 
-// TODO: Get it into a helpers library
-/**
- * Parses a JSON string and returns the object or null
- * @param {string} json The JSON string to parse
- * @returns {Object|null} The parsed object or null if an error occurred
- */
-function parseJSON(json) {
-        try {
-                return JSON.parse(json);
-        } catch (error) {
-                // ignore errors
-                logger.main.error(`Error while parsing json ${json}: ${error.message}`);
-        }
-}
-
-/**
- * Removes all empty objects from a plugin configuration
- * @param {Object} pconf An object containing a key for each Plugin, holding it's configuration
- * @returns A sanitized version of the plugin configuration object holding only plugins with values set
- */
-function vaccumPluginConf(pconf) {
-        const cleaned = _.pick(pconf, p => Object.keys(p).length > 0);
-        return cleaned;
-}
+// TODO: Add tests
+router.route('/capcodeRefresh').post(authHelper.isAdmin, async function(req, res, next) {
+        await performCapcodeRefresh();
+        nconf.set('database:aliasRefreshRequired', 0);
+        nconf.save();
+        res.status(200).send({ status: 'ok' });
+});
 
 module.exports = router;

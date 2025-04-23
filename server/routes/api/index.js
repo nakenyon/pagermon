@@ -18,8 +18,6 @@ router.use(capcodesRouter);
 function handleError(err, req, res, next) {
         logger.main.error(err);
 
-        // Write errors to the console in test mode, if they don't have a status -> Are not willingly sent by us.
-        if (process.env.NODE_ENV === 'test' && !err.status) console.log(err.message);
         const output = {
                 error: {
                         name: err.name,

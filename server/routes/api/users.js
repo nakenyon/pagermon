@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-globals */
 const express = require('express');
 const _ = require('underscore');
 const { InvalidRequestError, RequiredFieldMissingError, ResourceNotFoundError } = require('../../helpers/errors');
@@ -18,7 +19,7 @@ const router = express.Router();
  * @property {string} [surname] The user's last name
  * @property {string} email The user's email address
  * @property {"user"|"admin"} role The user's role
- * @property {"active"|"inactive"} status The user's status
+ * @property {"active"|"disabled"} status The user's status
  */
 
 /**
@@ -48,6 +49,39 @@ async function getSingleUser(filter) {
                 .first();
 
         return user || defaults;
+}
+
+/**
+ * Updates or creates a capcode in the database
+ * @param {User} user The capcode object to be inserted or updated
+ * @returns {User} The capcode object with the id set
+ */
+async function modifyUser(user) {
+        const update = typeof user?.id === 'number';
+
+        const insertion = _.defaults(user, {
+                surname: '',
+                role: 'user',
+                status: 'disabled',
+        });
+
+        if (insertion.password) {
+                const salt = await bcrypt.genSalt();
+                const hash = await bcrypt.hash(user.password, salt);
+                insertion.password = hash;
+        }
+
+        const insertResult = await db
+                .from('users')
+                .modify(qb => {
+                        if (update) qb.update(insertion).where('id', '=', insertion.id);
+                        else qb.insert(insertion);
+                })
+                .returning('id');
+
+        if (!update) user.id = insertResult[0].id;
+
+        return user;
 }
 
 router.route('/user')
@@ -122,23 +156,58 @@ router.route('/user')
                 }
         });
 
-router.route('/user/:id').get(authHelper.isAdmin, async function(req, res, next) {
-        try {
-                const { id } = req.params;
+router.route('/user/:id')
+        .get(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        const { id } = req.params;
+                        if (id === 'new') return res.json(await getSingleUser(false));
+                        return res.json(await getSingleUser({ id }));
+                } catch (error) {
+                        next(error);
+                }
+        })
+        .post(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        const parsedId = req.params.id || req.body.id || null;
+                        if (!parsedId) throw new RequiredFieldMissingError('id');
+                        if (parsedId === 'deleteMultiple') {
+                                // do delete multiple
+                                const idList = req.body.deleteList;
+                                if (!idList) throw new RequiredFieldMissingError('deleteList entries');
+                                if (idList.some(isNaN)) throw new InvalidRequestError('Id list contained non-numbers');
+                                // ADD CHECK TO NOT ALLOW DELETION OF USERID 1
+                                logger.main.info(`Deleting: ${idList}`);
+                                await db
+                                        .from('users')
+                                        .del()
+                                        .where('id', 'in', idList);
+                                return res.status(200).send({ status: 'ok' });
+                        }
 
-                if (id === 'new') return res.json(await getSingleUser(false));
+                        if (!req.body.username) throw new RequiredFieldMissingError('username');
+                        if (!req.body.email) throw new RequiredFieldMissingError('email');
+                        if (!req.body.givenname) throw new RequiredFieldMissingError('givenname');
 
-                const user = await db
-                        .from('users')
-                        .select('id', 'givenname', 'surname', 'username', 'email', 'role', 'status', 'lastlogondate')
-                        .where('id', id)
-                        .first();
-                if (!user) return res.json(await getSingleUser(false));
+                        // This should never be POST, but DELETE!
 
-                res.json(user);
-        } catch (error) {
-                next(error);
-        }
-});
+                        if (parsedId === 'new') {
+                                // Password is a required field if this is a new account check for that
+                                if (!req.body.password) throw new RequiredFieldMissingError('password');
+                        }
+                        const id = parsedId === 'new' ? null : parseInt(parsedId, 10);
+
+                        const user = _.pick(req.body, ['username', 'givenname', 'surname', 'email', 'role', 'status']);
+
+                        user.id = id;
+                        const password = req.body.newpassword || req.body.password || null;
+                        if (password) user.password = password;
+
+                        const result = await modifyUser(user);
+
+                        res.send({ status: 'ok', id: result.id });
+                } catch (error) {
+                        next(error);
+                }
+        });
 
 module.exports = router;

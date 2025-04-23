@@ -170,8 +170,7 @@ describe('POST /api/user', () => {
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(400);
-                                res.body.status.should.eql('error');
-                                res.body.error.should.eql('Invalid request body');
+                                res.body.error.name.should.eql('RequiredFieldMissingError');
                                 res.type.should.eql('application/json');
                                 done();
                         });

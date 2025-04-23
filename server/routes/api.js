@@ -30,17 +30,6 @@ router.use(function(req, res, next) {
 });
 
 router.route('/user')
-        .get(authHelper.isAdmin, function(req, res, next) {
-                db.from('users')
-                        .select('id', 'givenname', 'surname', 'username', 'email', 'role', 'status', 'lastlogondate')
-                        .then(rows => {
-                                res.json(rows);
-                        })
-                        .catch(err => {
-                                logger.main.error(err);
-                                return next(err);
-                        });
-        })
         .post(authHelper.isAdmin, function(req, res, next) {
                 if (
                         req.body.username &&

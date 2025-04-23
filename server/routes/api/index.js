@@ -3,6 +3,7 @@ const logger = require('../../log');
 
 const messagesRouter = require('./messages');
 const capcodesRouter = require('./capcodes');
+const usersRouter = require('./users');
 
 const router = express.Router();
 
@@ -14,6 +15,7 @@ router.use(function(req, res, next) {
 
 router.use(messagesRouter);
 router.use(capcodesRouter);
+router.use(usersRouter);
 
 function handleError(err, req, res, next) {
         logger.main.error(err);

@@ -1,24 +1,16 @@
-var nconf = require('nconf');
+const nconf = require('nconf');
+const logger = require('./log');
 
-var confFile = './config/config.json';
-var logger = require('./log');
-
-var loglevel = nconf.get('global:loglevel');
-
-if ((loglevel = 'debug')) {
-        var debugon = true;
-} else {
-        var debugon = false;
-}
+const debug = nconf.get('global:loglevel') === 'debug';
 
 var dbtype = nconf.get('database:type');
 
 // in order to create migration files, client must be hardcoded to 'sqlite3' otherwise it won't work.
-var dbconfig = {
+const dbconfig = {
         client: dbtype,
         connection: {},
         useNullAsDefault: true,
-        debug: debugon,
+        debug,
         migrations: {
                 tableName: 'knex_migrations',
                 directory: `${__dirname}/knex/migrations`,
@@ -44,20 +36,20 @@ var dbconfig = {
 if (process.env.NODE_ENV === 'test') {
         dbconfig.client = 'sqlite3'; // Always use sqlite3 for tests, regardless what is being set in config (for now)
         dbconfig.connection.filename = './test/messages.db';
-} else if (dbtype == 'sqlite3') {
+} else if (dbtype === 'sqlite3') {
         dbconfig.connection.filename = nconf.get('database:file');
-} else if (dbtype == 'mysql') {
+} else if (dbtype === 'mysql') {
         dbconfig.connection.host = nconf.get('database:server');
         dbconfig.connection.port = nconf.get('database:port');
         dbconfig.connection.user = nconf.get('database:username');
         dbconfig.connection.password = nconf.get('database:password');
         dbconfig.connection.database = nconf.get('database:database');
-} else if (dbtype == 'oracledb') {
+} else if (dbtype === 'oracledb') {
         dbconfig.connection.connectString = nconf.get('database:connectString');
         dbconfig.connection.user = nconf.get('database:username');
         dbconfig.connection.password = nconf.get('database:password');
         dbconfig.fetchAsString = ['clob'];
-}
+} // TODO: we have mssql and postgres in other parts of the code, but it's not included here.
 
 // this is required because of the silly way knex migrations handle environments
 module.exports = Object.assign({}, dbconfig, {

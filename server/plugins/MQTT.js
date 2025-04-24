@@ -2,13 +2,9 @@ const mqtt = require('mqtt');
 const logger = require('../log');
 
 function run(trigger, scope, data, config, callback) {
+        const filterMode = config.filterMode ? config.filterMode.value : 0;
         const pConf = data.pluginconf.MQTT;
-        if (
-                !(pConf && pConf.enable) &&
-                config.filterMode.value !== '2' &&
-                !(config.filterMode.value === '1' && data.alias_id)
-        )
-                return callback();
+        if (!(pConf && pConf.enable) && filterMode !== '2' && !(filterMode === '1' && data.alias_id)) return callback();
 
         logger.main.debug('MQTT: connecting to MQTT server');
 

@@ -27,6 +27,7 @@ const router = express.Router();
  * @param {false|Object} filter If false, an empty user object is returned
  * @param {User.id} filter.id The id of the user
  * @param {User.username} filter.username The users username
+ * @param {User.email} filter.email The users email
  * @returns {User} The user object, an empty one if nothing was found.
  */
 async function getSingleUser(filter) {
@@ -41,7 +42,7 @@ async function getSingleUser(filter) {
         };
         if (!filter) return defaults;
 
-        const filterCleaned = _.pick(filter, ['id', 'username']);
+        const filterCleaned = _.pick(filter, ['id', 'username', 'email']);
         const user = await db
                 .from('users')
                 .select('*')
@@ -225,5 +226,25 @@ router.route('/user/:id')
                         next(error);
                 }
         });
+
+router.route('/userCheck/username/:username').get(authHelper.isAdmin, async function(req, res, next) {
+        try {
+                const { username } = req.params;
+                const user = await getSingleUser({ username });
+                res.send(user);
+        } catch (error) {
+                next(error);
+        }
+});
+
+router.route('/userCheck/email/:email').get(authHelper.isAdmin, async function(req, res, next) {
+        try {
+                const { email } = req.params;
+                const user = await getSingleUser({ email });
+                res.send(user);
+        } catch (error) {
+                next(error);
+        }
+});
 
 module.exports = router;

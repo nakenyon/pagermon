@@ -695,7 +695,7 @@ describe('DELETE /api/user/:id', () => {
                         .set('apikey', 'reallylongkeythatneedstobechanged')
                         .end((err, res) => {
                                 res.status.should.eql(400);
-                                res.body.error.should.eql('User ID 1 is protected');
+                                res.body.error.message.should.eql('User ID 1 is protected');
                                 done();
                         });
         });

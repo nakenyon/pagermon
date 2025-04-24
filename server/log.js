@@ -20,14 +20,14 @@ function createLogger(name, options) {
                 ),
                 transports: [
                         new winston.transports.File({
-                                level: options.logLevel.file || loglevel,
+                                level: options?.logLevel?.file || loglevel,
                                 filename: `./logs/${options?.filename || name}.log`,
                                 handleExceptions: true,
                                 maxsize: 10485760,
                                 maxFiles: 5,
                         }),
                         new winston.transports.Console({
-                                level: options.logLevel.console || loglevel,
+                                level: options?.logLevel?.console || loglevel,
                                 handleExceptions: true,
                         }),
                 ],

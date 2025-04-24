@@ -289,7 +289,7 @@ router.route('/messages')
               db.from('capcodes')
                 .select('id', 'ignore')
                 .whereRaw(`? LIKE ??`, [address, 'address'])
-                .orderByRaw(`REPLACE(??, '_', '%') DESC`, ['address']);
+                .orderByRaw(`REPLACE(??, '_', '%') DESC`, ['address'])
                 .then((row) => {
                   var insert;
                   var alias_id = null;
@@ -593,7 +593,7 @@ router.route('/messageSearch')
           qb.whereRaw(`CONTAINS("messages"."message", ?, 1) > 0`, query)
         } else {
           if (address != '')
-            qb.whereLike('messages.address', address).orWhere('messages.source', address);
+            qb.where('messages.address', 'LIKE', address).orWhere('messages.source', address);
           if (agency != '')
             qb.whereIn('messages.alias_id', function (qb2) {
               qb2.select('id').from('capcodes').where('agency', agency).where('ignore', 0);
@@ -789,7 +789,7 @@ router.route('/capcodes/agency/:id')
     var id = req.params.id;
     db.from('capcodes')
       .select('*')
-      .whereLike('agency', id)
+      .where('agency', 'LIKE', id)
       .then((rows) => {
         res.status(200);
         res.json(rows);
@@ -913,8 +913,8 @@ router.route('/capcodes/:id')
                 .update('alias_id', function () {
                   this.select('id')
                     .from('capcodes')
-                    .whereLike('messages.address', 'address')
-                    .orderByRaw(`REPLACE(??, '_', '%') DESC`, 'address');
+                    .where('messages.address', 'LIKE', 'address')
+                    .orderByRaw(`REPLACE(??, '_', '%') DESC`, 'address')
                     .limit(1)
                 })
                 .catch((err) => {
@@ -932,7 +932,7 @@ router.route('/capcodes/:id')
                 db('messages').update('alias_id', function () {
                   this.select('id')
                     .from('capcodes')
-                    .whereLike(db.ref('messages.address'), db.ref('capcodes.address'))
+                    .where('messages.address', 'LIKE', db.ref('capcodes.address'))
                     .orderByRaw(`REPLACE(??, '_', '%') DESC`, ['address']) 
                     .limit(1)
                 })
@@ -1027,7 +1027,7 @@ router.route('/capcodeRefresh')
     db('messages').update('alias_id', function () {
       this.select('id')
         .from('capcodes')
-        .whereLike(db.ref('messages.address'), db.ref('capcodes.address'))
+        .where('messages.address', 'LIKE', db.ref('capcodes.address'))
         .orderByRaw(`REPLACE(??, '_', '%') DESC`, ['address'])
         .limit(1)
     })

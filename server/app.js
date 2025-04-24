@@ -1,27 +1,22 @@
-var version = '0.4.0-beta';
+const version = '0.4.0-beta';
 
-var debug = require('debug')('pagermon:server');
-var io = require('@pm2/io').init({
-        http: true, // HTTP routes logging (default: true)
-        ignore_routes: [/socket\.io/, /notFound/], // Ignore http routes with this pattern (Default: [])
-        errors: true, // Exceptions logging (default: true)
-        custom_probes: true, // Auto expose JS Loop Latency and HTTP req/s as custom metrics
-        network: true, // Network monitoring at the application level
-        ports: true, // Shows which ports your app is listening on (default: false)
-        transactions: true,
-});
-var http = require('http');
-var compression = require('compression');
-var express = require('express');
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('./log');
-var cookieParser = require('cookie-parser');
-var bodyParser = require('body-parser');
-var fs = require('fs');
-var session = require('express-session');
-var SQLiteStore = require('connect-sqlite3')(session);
-var flash = require('connect-flash');
+const { CronJob } = require('cron');
+const bodyParser = require('body-parser');
+const compression = require('compression');
+const cookieParser = require('cookie-parser');
+const cronvalidate = require('cron-validator');
+const express = require('express');
+const favicon = require('serve-favicon');
+const flash = require('connect-flash');
+const fs = require('fs');
+const http = require('http');
+const nconf = require('nconf');
+const path = require('path');
+const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
+
+const logger = require('./log');
+const passport = require('./auth/local');
 
 process.on('SIGINT', function() {
         console.log('\nGracefully shutting down from SIGINT (Ctrl-C)');
@@ -29,42 +24,29 @@ process.on('SIGINT', function() {
 });
 
 // create config file if it does not exist, and set defaults
-var conf_defaults = require('./config/default.json');
+const defaultConfiguration = require('./config/default.json');
 
-var confFile = './config/config.json';
+const confFile = './config/config.json';
 if (!fs.existsSync(confFile)) {
-        fs.writeFileSync(confFile, JSON.stringify(conf_defaults, null, 2));
+        fs.writeFileSync(confFile, JSON.stringify(defaultConfiguration, null, 2));
 }
-// load the config file
-var nconf = require('nconf');
 
+// load the config file
 nconf.file({ file: confFile });
+nconf.defaults(defaultConfiguration);
 nconf.load();
 
 // Load current theme
-var theme = nconf.get('global:theme');
-// set the theme if none found, for backwards compatibility
-if (!theme) {
-        nconf.set('global:theme', 'default');
-        nconf.save();
-        var theme = nconf.get('global:theme');
-}
-
-var dbtype = nconf.get('database:type');
-// Set the database port if none found, for backwards compatibility
-if (dbtype == 'pg' || dbtype == 'mysql' || dbtype == 'mssql') {
-        if (!nconf.get('database:port')) {
-                nconf.set('database:port', 3306);
-                nconf.save();
-        }
-}
+const theme = nconf.get('global:theme');
 
 // Enable Azure Monitoring if enabled
-var azureEnable = nconf.get('monitoring:azureEnable');
-var azureKey = nconf.get('monitoring:azureKey');
+const azureEnable = nconf.get('monitoring:azureEnable');
 if (azureEnable) {
-        logger.main.debug('Starting Azure Application Insights');
+        // eslint-disable-next-line global-require
         const appInsights = require('applicationinsights');
+
+        logger.main.debug('Starting Azure Application Insights');
+        const azureKey = nconf.get('monitoring:azureKey');
         appInsights
                 .setup(azureKey)
                 .setAutoDependencyCorrelation(true)
@@ -77,40 +59,75 @@ if (azureEnable) {
                 .start();
 }
 
-checkForDbDriver(nconf.get('database:type'));
+require('@pm2/io').init({
+        http: true, // HTTP routes logging (default: true)
+        ignore_routes: [/socket\.io/, /notFound/], // Ignore http routes with this pattern (Default: [])
+        errors: true, // Exceptions logging (default: true)
+        custom_probes: true, // Auto expose JS Loop Latency and HTTP req/s as custom metrics
+        network: true, // Network monitoring at the application level
+        ports: true, // Shows which ports your app is listening on (default: false)
+        transactions: true,
+});
 
+checkForDbDriver(nconf.get('database:type'));
 require('./db').init();
 
-var db = require('./knex/knex.js');
+const dbtype = nconf.get('database:type');
+// Set the database port if none found, for backwards compatibility
+if ((dbtype === 'pg' || dbtype === 'mysql' || dbtype === 'mssql') && !nconf.get('database:port')) {
+        nconf.set('database:port', 3306);
+        nconf.save();
+}
 
-var passport = require('./auth/local');
+const db = require('./knex/knex.js');
 
-// routes
-var index = require('./routes/index');
-var admin = require('./routes/admin');
-const api = require('./routes/api/index.js');
-var auth = require('./routes/auth');
+const port = normalizePort(process.env.PORT || '3000');
+const app = express();
 
-var port = normalizePort(process.env.PORT || '3000');
-var app = express();
 app.set('port', port);
 // view engine setup
 app.set('views', path.join(__dirname, 'themes', theme, 'views'));
 app.set('view engine', 'ejs');
 app.set('trust proxy', 'loopback, linklocal, uniquelocal');
 
-var server = http.createServer(app);
-var io = require('socket.io')(server);
+const server = http.createServer(app);
+const socketIo = require('socket.io')(server);
 
 server.listen(port);
-server.on('error', onError);
-server.on('listening', onListening);
+server.on('error', error => {
+        {
+                if (error.syscall !== 'listen') {
+                        throw error;
+                }
+
+                const bind = typeof port === 'string' ? `Pipe ${port}` : `Port ${port}`;
+
+                // handle specific listen errors with friendly messages
+                switch (error.code) {
+                        case 'EACCES':
+                                console.error(`${bind} requires elevated privileges`);
+                                process.exit(1);
+                                break;
+                        case 'EADDRINUSE':
+                                console.error(`${bind} is already in use`);
+                                process.exit(1);
+                                break;
+                        default:
+                                throw error;
+                }
+        }
+});
+server.on('listening', () => {
+        const addr = server.address();
+        const bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr.port}`;
+        logger.main.info(`Listening on ${bind}`);
+});
 // Set connection timeout to prevent long running queries failing on large databases - mostly capacode refresh on MySQL
 server.on('connection', function(connection) {
         connection.setTimeout(600 * 1000);
 });
 // Lets set setMaxListeners to a decent number - not to high to allow the memory leak warking to still trigger
-io.sockets.setMaxListeners(20);
+socketIo.sockets.setMaxListeners(20);
 
 // Lets set setMaxListeners to a decent number - not to high to allow the memory leak warking to still trigger
 /*     io.sockets.setMaxListeners(20);
@@ -121,7 +138,7 @@ io.sockets.setMaxListeners(20);
             socket.removeAllListeners();
     }); */
 
-io.sockets.on('connection', function(socket) {
+socketIo.sockets.on('connection', function(socket) {
         socket.removeAllListeners();
         const userGroup = socket.request?.user?.role || 'anonymous';
         socket.join(userGroup);
@@ -131,12 +148,12 @@ app.use(favicon(path.join(__dirname, 'themes', theme, 'public', 'favicon.ico')))
 
 // set socket.io to be shared across all modules
 app.use(function(req, res, next) {
-        req.io = io;
+        req.io = socketIo;
         next();
 });
 
 // session secret is controlled by config
-var secret = nconf.get('global:sessionSecret');
+const secret = nconf.get('global:sessionSecret');
 // compress all responses
 app.use(compression());
 app.use(require('morgan')('combined', { stream: logger.http.stream }));
@@ -154,7 +171,7 @@ app.use(
 ); // to support URL-encoded bodies
 app.use(cookieParser());
 
-var sessSet = {
+const sessionSettings = {
         cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }, // 1 week
         store: new SQLiteStore(),
         saveUninitialized: true,
@@ -162,9 +179,10 @@ var sessSet = {
         secret,
 };
 
-if (process.env.HOSTNAME && process.env.USE_COOKIE_HOST) sessSet.cookie.domain = `.${process.env.HOSTNAME}`;
+if (process.env.HOSTNAME && process.env.USE_COOKIE_HOST) sessionSettings.cookie.domain = `.${process.env.HOSTNAME}`;
 
-app.use(session(sessSet));
+app.use(session(sessionSettings));
+
 app.use(passport.initialize());
 app.use(passport.session()); // persistent login sessions
 app.use(flash());
@@ -177,16 +195,22 @@ app.use(function(req, res, next) {
 });
 
 const wrapMiddleware = middleware => (socket, next) => middleware(socket.request, {}, next);
-io.use(wrapMiddleware(session(sessSet)));
-io.use(wrapMiddleware(passport.session()));
-io.of('/adminio').use(wrapMiddleware(session(sessSet)));
-io.of('adminio').use(wrapMiddleware(passport.session()));
+socketIo.use(wrapMiddleware(session(sessionSettings)));
+socketIo.use(wrapMiddleware(passport.session()));
+socketIo.of('/adminio').use(wrapMiddleware(session(sessionSettings)));
+socketIo.of('adminio').use(wrapMiddleware(passport.session()));
 
-app.use('/', index);
-app.use('/admin', admin);
-app.use('/post', api); // TODO: Why do we need it?
-app.use('/api', api);
-app.use('/auth', auth);
+// routes
+const indexRouter = require('./routes/index');
+const adminRouter = require('./routes/admin');
+const apiRouter = require('./routes/api/index.js');
+const authRouter = require('./routes/auth');
+
+app.use('/', indexRouter);
+app.use('/admin', adminRouter);
+app.use('/post', apiRouter); // TODO: Why do we need it?
+app.use('/api', apiRouter);
+app.use('/auth', authRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
@@ -195,9 +219,9 @@ app.use(function(req, res, next) {
         next(err);
 });
 
-// error handler
+// GUI error handler
 app.use(function(err, req, res, next) {
-        var title = nconf.get('global:monitorName') || 'PagerMon';
+        const title = nconf.get('global:monitorName');
         // set locals, only providing error in development
         res.locals.message = err.message;
         res.locals.error = req.app.get('env') === 'development' ? err : {};
@@ -213,52 +237,39 @@ app.use(function(err, req, res, next) {
 });
 
 // Add cronjob to automatically refresh aliases
-var dbtype = nconf.get('database:type');
-if (dbtype == 'mysql') {
-        const cronvalidate = require('cron-validator');
+if (dbtype === 'mysql') {
         // Get CRON from config
-        var cronartime = nconf.get('database:aliasRefreshInterval');
-        // If value is falsy (undefined, empty, null etc), set as default
-        if (!cronartime) {
-                cronartime = '0 5,35 * * * *';
-        }
+        let cronartime = nconf.get('database:aliasRefreshInterval');
+
         // Check value isn't garbage, if it is set to default
         if (!cronvalidate.isValidCron(cronartime, { seconds: true })) {
                 logger.main.warn('CRON: Invalid CRON configuration in config file. Defaulting to: "0 5,35 * * * *" ');
                 cronartime = '0 5,35 * * * *';
         }
-        var aliasRefreshJob = require('cron').CronJob;
-        new aliasRefreshJob(
+        CronJob.from(
                 cronartime,
-                function() {
-                        var refreshRequired = nconf.get('database:aliasRefreshRequired');
-                        logger.main.debug('CRON: Running Cronjob AliasRefresh');
-                        if (refreshRequired == 1) {
+                async () => {
+                        try {
+                                logger.main.debug('CRON: Running Cronjob AliasRefresh');
+                                if (!nconf.get('database:aliasRefreshRequired'))
+                                        return logger.main.debug('CRON: Alias Refresh not Required, Skipping.');
+
                                 console.time('updateMap');
                                 logger.main.info('CRON: Alias Refresh required, running.');
-                                db('messages')
-                                        .update('alias_id', function() {
-                                                this.select('id')
-                                                        .from('capcodes')
-                                                        .where(
-                                                                db.ref('messages.address'),
-                                                                'like',
-                                                                db.ref('capcodes.address')
-                                                        )
-                                                        .orderByRaw("REPLACE(address, '_', '%') DESC LIMIT 1");
-                                        })
-                                        .then(result => {
-                                                console.timeEnd('updateMap');
-                                                nconf.set('database:aliasRefreshRequired', 0);
-                                                nconf.save();
-                                                logger.main.info('CRON: Alias Refresh Successful');
-                                        })
-                                        .catch(err => {
-                                                logger.main.error(`CRON: Error refreshing aliases${err}`);
-                                                console.timeEnd('updateMap');
-                                        });
-                        } else {
-                                logger.main.debug('CRON: Alias Refresh not Required, Skipping.');
+                                await db('messages').update('alias_id', function() {
+                                        this.select('id')
+                                                .from('capcodes')
+                                                .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
+                                                .orderByRaw("REPLACE(address, '_', '%') DESC LIMIT 1");
+                                });
+
+                                console.timeEnd('updateMap');
+                                nconf.set('database:aliasRefreshRequired', 0);
+                                nconf.save();
+                                logger.main.info('CRON: Alias Refresh Successful');
+                        } catch (error) {
+                                console.timeEnd('updateMap');
+                                logger.main.error(`CRON: Error refreshing aliases: ${error.message}`);
                         }
                 },
                 null,
@@ -277,46 +288,15 @@ if (process.env.NODE_ENV === 'test') {
 module.exports = app;
 
 function normalizePort(val) {
-        var port = parseInt(val, 10);
-
-        if (isNaN(port)) {
-                // named pipe
-                return val;
-        }
-
-        if (port >= 0) {
-                // port number
-                return port;
-        }
-
-        return false;
-}
-
-function onError(error) {
-        if (error.syscall !== 'listen') {
-                throw error;
-        }
-
-        var bind = typeof port === 'string' ? `Pipe ${port}` : `Port ${port}`;
-
-        // handle specific listen errors with friendly messages
-        switch (error.code) {
-                case 'EACCES':
-                        console.error(`${bind} requires elevated privileges`);
-                        process.exit(1);
-                        break;
-                case 'EADDRINUSE':
-                        console.error(`${bind} is already in use`);
-                        process.exit(1);
-                        break;
-                default:
-                        throw error;
-        }
+        const parsedPort = parseInt(val, 10);
+        if (Number.isNaN(parsedPort)) return val;
+        if (parsedPort < 0) return false;
+        return parsedPort;
 }
 
 function checkForDbDriver(driver) {
         switch (driver) {
-                /* eslint-disable import/no-extraneous-dependencies, global-require */
+                /* eslint-disable import/no-unresolved, import/no-extraneous-dependencies, global-require */
                 case 'sqlite3': {
                         try {
                                 require('sqlite3');
@@ -365,10 +345,4 @@ function checkForDbDriver(driver) {
                 }
         }
         /* eslint-enable import/no-extraneous-dependencies, global-require */
-}
-
-function onListening() {
-        var addr = server.address();
-        var bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr.port}`;
-        logger.main.info(`Listening on ${bind}`);
 }

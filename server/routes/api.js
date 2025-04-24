@@ -90,26 +90,6 @@ router.route('/userCheck/email/:id').get(authHelper.isAdmin, function(req, res, 
                 });
 });
 
-router.route('/user/:id')
-        .delete(authHelper.isAdmin, function(req, res, next) {
-                var id = parseInt(req.params.id, 10);
-                if (id != 1) {
-                        logger.main.info(`Deleting User ${id}`);
-                        db.from('users')
-                                .del()
-                                .where('id', id)
-                                .then(result => {
-                                        res.status(200).send({ status: 'ok' });
-                                })
-                                .catch(err => {
-                                        res.status(500).send(err);
-                                        logger.main.error(err);
-                                });
-                } else {
-                        res.status(400).json({ error: 'User ID 1 is protected' });
-                        logger.main.error('Unable to delete user ID 1');
-                }
-        });
 
 router.use([handleError]);
 

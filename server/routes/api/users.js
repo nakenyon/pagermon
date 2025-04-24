@@ -208,6 +208,22 @@ router.route('/user/:id')
                 } catch (error) {
                         next(error);
                 }
+        })
+        .delete(authHelper.isAdmin, async function(req, res, next) {
+                try {
+                        const id = parseInt(req.params.id, 10);
+                        if (id === 1) throw new InvalidRequestError('User ID 1 is protected');
+
+                        logger.main.info(`Deleting User ${id}`);
+                        await db
+                                .from('users')
+                                .del()
+                                .where('id', id);
+
+                        res.status(200).send({ status: 'ok' });
+                } catch (error) {
+                        next(error);
+                }
         });
 
 module.exports = router;

@@ -479,7 +479,7 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
                                 if (query)
                                         switch (dbtype) {
                                                 case 'sqlite3':
-                                                        qb.whereIn(
+                                                        qb.andWhereIn(
                                                                 'messages.id',
                                                                 db
                                                                         .from('messages_search_index')
@@ -492,34 +492,37 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
 
                                                         break;
                                                 case 'mysql':
-                                                        qb.whereRaw(
+                                                        qb.andWhereRaw(
                                                                 `MATCH(messages.message, messages.address, messages.source) AGAINST (? IN BOOLEAN MODE)`,
                                                                 `"${query}"`
                                                         );
                                                         break;
                                                 case 'oracledb':
-                                                        qb.whereRaw(`CONTAINS("messages"."message", ?, 1) > 0`, query);
+                                                        qb.andWhereRaw(
+                                                                `CONTAINS("messages"."message", ?, 1) > 0`,
+                                                                query
+                                                        );
                                                         break;
                                                 default:
                                                         break;
                                         }
 
                                 if (address)
-                                        qb.where(addressWhere => {
+                                        qb.andWhere(addressWhere => {
                                                 addressWhere
                                                         .where('messages.address', 'LIKE', address)
                                                         .orWhere('messages.source', address);
                                         });
                                 if (agency)
-                                        qb.where(agencyWhere => {
+                                        qb.andWhere(agencyWhere => {
                                                 agencyWhere
                                                         .where('capcodes.agency', 'LIKE', `%${agency}%`)
                                                         .andWhere('capcodes.ignore', false);
                                         });
 
                                 if (alias) {
-                                        if (alias === '-1') qb.whereNull('messages.alias_id');
-                                        else qb.where('messages.alias_id', alias);
+                                        if (alias === '-1') qb.andWhereNull('messages.alias_id');
+                                        else qb.andWhere('messages.alias_id', alias);
                                 }
                         })
                         .orderBy('messages.timestamp', 'desc');

@@ -175,7 +175,7 @@ const sessionSettings = {
         cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }, // 1 week
         store: new SQLiteStore(),
         saveUninitialized: true,
-        resave: 'true',
+        resave: true,
         secret,
 };
 

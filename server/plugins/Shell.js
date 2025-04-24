@@ -3,7 +3,7 @@ var fs = require('fs');
 var logger = require('../log');
 
 function run(trigger, scope, data, config, callback) {
-        if (!data.plubincon.Shell || !data.pluginconf.Shell.enable) return callback(DataTransferItem);
+        if (!data.plubincon.Shell || !data.pluginconf.Shell.enable) return callback(data);
 
         // Override ID if needed
         const fileName = data.pluginconf.Shell.overrideAlias > 0 ? data.pluginconf.Shell.overrideAlias : data.alias_id;
@@ -14,13 +14,20 @@ function run(trigger, scope, data, config, callback) {
         const fullFileName = process.platform === 'win32' ? `${fileName}.ps1` : `${fileName}.sh`;
 
         const shell = data.pluginconf.Shell.shell || process.platform === 'win32' ? 'powershell.exe' : 'sh';
-        if (process.platform === 'win32' && shell !== 'powershell.exe')
-                return logger.main.error('Shell must be powershell.exe on Windows');
-        if (process.platform !== 'win32' && shell === 'powershell.exe')
-                return logger.main.error('Powershell is only available on Windows');
+        if (process.platform === 'win32' && shell !== 'powershell.exe') {
+                logger.main.error('Shell must be powershell.exe on Windows');
+                return callback(data);
+        }
+        if (process.platform !== 'win32' && shell === 'powershell.exe') {
+                logger.main.error('Powershell is only available on Windows');
+                return callback(data);
+        }
 
         // Check file exist
-        if (!fs.existsSync(filePath + fullFileName)) return logger.main.info(`File ${fullFileName} not exist`);
+        if (!fs.existsSync(filePath + fullFileName)) {
+                logger.main.info(`File ${fullFileName} not exist`);
+                return callback(data);
+        }
 
         logger.main.info('Exec shell command for selected alias');
 

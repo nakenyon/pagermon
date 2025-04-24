@@ -87,8 +87,7 @@ var passport = require('./auth/local');
 // routes
 var index = require('./routes/index');
 var admin = require('./routes/admin');
-var api = require('./routes/api');
-const newApi = require('./routes/api/index.js');
+const api = require('./routes/api/index.js');
 var auth = require('./routes/auth');
 
 var port = normalizePort(process.env.PORT || '3000');
@@ -181,8 +180,7 @@ io.of('adminio').use(wrapMiddleware(passport.session()));
 
 app.use('/', index);
 app.use('/admin', admin);
-app.use('/post', api);
-app.use('/api', newApi);
+app.use('/post', api); // TODO: Why do we need it?
 app.use('/api', api);
 app.use('/auth', auth);
 

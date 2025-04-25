@@ -498,10 +498,7 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
                                                         );
                                                         break;
                                                 case 'oracledb':
-                                                        qb.whereRaw(
-                                                                `CONTAINS("messages"."message", ?, 1) > 0`,
-                                                                query
-                                                        );
+                                                        qb.whereRaw(`CONTAINS("messages"."message", ?, 1) > 0`, query);
                                                         break;
                                                 default:
                                                         break;

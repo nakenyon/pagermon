@@ -3,7 +3,6 @@ const LocalStrategy = require('passport-local').Strategy;
 const LocalAPIKeyStrategy = require('passport-localapikey-update').Strategy;
 
 const nconf = require('nconf');
-const logger = require('../log');
 
 const confFile = './config/config.json';
 nconf.file({ file: confFile });

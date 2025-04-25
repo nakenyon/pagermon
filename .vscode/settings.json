@@ -10,5 +10,7 @@
   // tell the ESLint plugin to run on save
   "editor.codeActionsOnSave": {
     "source.fixAll": "never"
-  }
+  },
+  "editor.tabSize": 8,
+  "editor.detectIndentation": false
 }

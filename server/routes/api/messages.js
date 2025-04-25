@@ -82,8 +82,8 @@ async function isDatabaseDuplicate(data) {
                                                                         .as('temp_tab');
                                                         });
                                         })
-                                        .andWhere('message', '=', data.message)
-                                        .andWhere('address', '=', data.address);
+                                        .where('message', '=', data.message)
+                                        .where('address', '=', data.address);
                         } else if (dupeLimit !== 0 && dupeTime === 0) {
                                 queryBuilder
                                         .where('id', 'in', function() {
@@ -97,8 +97,8 @@ async function isDatabaseDuplicate(data) {
                                                                         .as('temp_tab');
                                                         });
                                         })
-                                        .andWhere('message', '=', data.message)
-                                        .andWhere('address', '=', data.address);
+                                        .where('message', '=', data.message)
+                                        .where('address', '=', data.address);
                         } else if (dupeLimit === 0 && dupeTime !== 0) {
                                 queryBuilder
                                         .where('id', 'in', function() {
@@ -106,10 +106,10 @@ async function isDatabaseDuplicate(data) {
                                                         .from('messages')
                                                         .where('timestamp', '>', timeDiff);
                                         })
-                                        .andWhere('message', '=', data.message)
-                                        .andWhere('address', '=', data.address);
+                                        .where('message', '=', data.message)
+                                        .where('address', '=', data.address);
                         } else {
-                                queryBuilder.where('message', '=', data.message).andWhere('address', '=', data.address);
+                                queryBuilder.where('message', '=', data.message).where('address', '=', data.address);
                         }
                 });
 
@@ -411,7 +411,7 @@ router.route('/messages/:messageId').get(authHelper.isLoggedInMessages, async fu
 
                 const message = await getMessageQuery(req)
                         .select(fields)
-                        .andWhere('messages.id', messageId)
+                        .where('messages.id', messageId)
                         .first();
 
                 res.status(200).json(message || {});
@@ -479,7 +479,7 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
                                 if (query)
                                         switch (dbtype) {
                                                 case 'sqlite3':
-                                                        qb.andWhereIn(
+                                                        qb.whereIn(
                                                                 'messages.id',
                                                                 db
                                                                         .from('messages_search_index')
@@ -492,13 +492,13 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
 
                                                         break;
                                                 case 'mysql':
-                                                        qb.andWhereRaw(
+                                                        qb.whereRaw(
                                                                 `MATCH(messages.message, messages.address, messages.source) AGAINST (? IN BOOLEAN MODE)`,
                                                                 `"${query}"`
                                                         );
                                                         break;
                                                 case 'oracledb':
-                                                        qb.andWhereRaw(
+                                                        qb.whereRaw(
                                                                 `CONTAINS("messages"."message", ?, 1) > 0`,
                                                                 query
                                                         );
@@ -508,21 +508,21 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
                                         }
 
                                 if (address)
-                                        qb.andWhere(addressWhere => {
+                                        qb.where(addressWhere => {
                                                 addressWhere
                                                         .where('messages.address', 'LIKE', address)
                                                         .orWhere('messages.source', address);
                                         });
                                 if (agency)
-                                        qb.andWhere(agencyWhere => {
+                                        qb.where(agencyWhere => {
                                                 agencyWhere
                                                         .where('capcodes.agency', 'LIKE', `%${agency}%`)
-                                                        .andWhere('capcodes.ignore', false);
+                                                        .where('capcodes.ignore', false);
                                         });
 
                                 if (alias) {
-                                        if (alias === '-1') qb.andWhereNull('messages.alias_id');
-                                        else qb.andWhere('messages.alias_id', alias);
+                                        if (alias === '-1') qb.whereNull('messages.alias_id');
+                                        else qb.where('messages.alias_id', alias);
                                 }
                         })
                         .orderBy('messages.timestamp', 'desc');

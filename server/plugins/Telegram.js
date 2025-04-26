@@ -15,7 +15,9 @@ async function run(trigger, scope, data, config, callback) {
                         return callback();
                 }
                 // Notification formatted in Markdown for pretty notifications
-                const notificationText = `*${data.agency} - ${data.alias}*\nMessage: ${data.message}`;
+                const notificationText =
+                        `<b>${escapeTelegramHTML(data.agency)} - ${escapeTelegramHTML(data.alias)}</b>\n` +
+                        `Message: ${escapeTelegramHTML(data.message)}`;
 
                 const responseData = await telegram.sendMessage({
                         chat_id: tConf.chat,
@@ -29,6 +31,10 @@ async function run(trigger, scope, data, config, callback) {
                 logger.main.error(`Telegram: ${error}`);
                 callback();
         }
+}
+
+function escapeTelegramHTML(string) {
+        return string.replace(/</, '&lt;').replace(/>/, '&gt;'.replace(/&/, '&amp;'));
 }
 
 module.exports = {

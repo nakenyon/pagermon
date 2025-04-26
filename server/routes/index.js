@@ -1,13 +1,7 @@
-var confFile = './config/config.json';
-var express = require('express');
+const express = require('express');
+const nconf = require('nconf');
 
-var router = express.Router();
-var nconf = require('nconf');
-
-nconf.file({ file: confFile });
-nconf.load();
-
-const passport = require('../auth/local');
+const router = express.Router();
 
 router.use(function(req, res, next) {
         res.locals.login = req.isAuthenticated();

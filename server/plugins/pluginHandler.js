@@ -11,7 +11,7 @@ async function handle(trigger, scope, initialMessage, callback) {
         logger.main.debug(`trigger: ${trigger} scope: ${scope}`);
         logger.main.debug('======================');
         logger.main.debug('data object');
-        logger.main.debug(util.format('%o', message));
+        logger.main.debug(util.format('%o', initialMessage));
         logger.main.debug('plugins object');
         logger.main.debug(util.format('%o', plugins));
         logger.main.debug('======================');

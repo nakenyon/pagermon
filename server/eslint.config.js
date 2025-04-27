@@ -46,25 +46,8 @@ module.exports = defineConfig([
                 },
         },
         {
-                files: ['**/*.json'],
-                plugins: { 'jsonc-eslint': require('eslint-plugin-jsonc') },
-                languageOptions: {
-                        parser: 'jsonc-eslint-parser',
-                        ecmaVersion: 2022,
-                        sourceType: 'script',
-                        globals: {
-                                ...globals.node,
-                        },
-                },
-                rules: {
-                        'jsonc/no-duplicate-keys': 'error',
-                        'jsonc/require-comma-before-curly': ['error', 'all'],
-                        'jsonc/require-comma-before-square': ['error', 'all'],
-                },
-        },
-        {
                 files: ['**/*.test.js'],
-                plugins: { js, chai: pluginChaiFriendly },
+                plugins: { js, "chai-friendly": pluginChaiFriendly },
                 languageOptions: {
                         globals: {
                                 ...globals.node,

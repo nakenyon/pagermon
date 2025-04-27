@@ -15,7 +15,7 @@ const nconf = require('nconf');
 const path = require('path');
 const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
-const performCapcodeRefresh = require('./routes/api/capcode').performCapcodeRefresh;
+const performCapcodeRefresh = require('./routes/api/capcodes.js').performCapcodeRefresh;
 
 const logger = require('./log');
 const passport = require('./auth/local');

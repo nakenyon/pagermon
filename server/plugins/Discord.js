@@ -1,4 +1,4 @@
-const discordLib = require('discord.js');
+const discordLib = require('discord.js'); // TODO: update!
 const toHex = require('colornames');
 const logger = require('../log');
 const util = require('util');

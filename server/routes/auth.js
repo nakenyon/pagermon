@@ -10,7 +10,7 @@ nconf.file({ file: confFile });
 nconf.load();
 
 // Brute force protection for public dupe checking routes
-const ExpressBrute = require('express-brute');
+const ExpressBrute = require('express-brute'); // TODO: Outdated, use express-rate-limit
 const BruteKnex = require('brute-knex');
 
 const db = require('../knex/knex.js');

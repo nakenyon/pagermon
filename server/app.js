@@ -256,6 +256,7 @@ if (dbtype === 'mysql') {
 
                                 console.time('updateMap');
                                 logger.main.info('CRON: Alias Refresh required, running.');
+                                // TODO: Switch to function used in route
                                 await db('messages').update('alias_id', function() {
                                         this.select('id')
                                                 .from('capcodes')

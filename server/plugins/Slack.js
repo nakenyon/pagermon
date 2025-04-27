@@ -1,4 +1,4 @@
-const Slack = require('slack');
+const Slack = require('slack'); // TODO: Deprecated, find a better library
 const logger = require('../log');
 
 function run(trigger, scope, data, config, callback) {

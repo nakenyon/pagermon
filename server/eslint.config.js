@@ -4,12 +4,13 @@ const js = require('@eslint/js');
 const prettierRecommended = require('eslint-plugin-prettier/recommended');
 const htmlPlugin = require('@html-eslint/eslint-plugin');
 const htmlParser = require('@html-eslint/parser');
+const pluginChaiFriendly = require('eslint-plugin-chai-friendly');
 const globals = require('globals');
 
 module.exports = defineConfig([
         {
                 files: ['**/*.js'],
-                plugins: { js },
+                plugins: { js, pluginChaiFriendly },
                 extends: ['js/recommended'],
                 languageOptions: {
                         ecmaVersion: 2022,
@@ -33,6 +34,8 @@ module.exports = defineConfig([
                                 },
                         ],
                         'prefer-arrow-callback': 'warn',
+                        'no-unused-expressions': 'off',
+                        'chai-friendly/no-unused-expressions': 'error',
                 },
         },
         {

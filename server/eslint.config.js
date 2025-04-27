@@ -6,11 +6,14 @@ const htmlPlugin = require('@html-eslint/eslint-plugin');
 const htmlParser = require('@html-eslint/parser');
 const pluginChaiFriendly = require('eslint-plugin-chai-friendly');
 const globals = require('globals');
+const importPlugin = require('eslint-plugin-import');
+const { should, ...chaiGlobals } = globals.chai;
 
 module.exports = defineConfig([
+        importPlugin.flatConfigs.recommended,
         {
                 files: ['**/*.js'],
-                plugins: { js, pluginChaiFriendly },
+                plugins: { js },
                 extends: ['js/recommended'],
                 languageOptions: {
                         ecmaVersion: 2022,
@@ -19,11 +22,17 @@ module.exports = defineConfig([
                                 ...globals.node,
                         },
                 },
-
                 rules: {
                         'no-console': 'warn',
-                        camelcase: 'warn',
-                        'no-unused-vars': 'error',
+                        camelcase: 'off',
+                        'no-unused-vars': [
+                                'error',
+                                {
+                                        argsIgnorePattern: '^(_|.*(res|err|next|req|done|cb|callback))',
+                                        varsIgnorePattern: '^(_|.*(res|err|next|req|done|cb|callback))',
+                                        ignoreRestSiblings: true,
+                                },
+                        ],
                         'no-undef': 'warn',
                         'no-var': 'error',
                         'prefer-const': [
@@ -34,6 +43,36 @@ module.exports = defineConfig([
                                 },
                         ],
                         'prefer-arrow-callback': 'warn',
+                },
+        },
+        {
+                files: ['**/*.json'],
+                plugins: { 'jsonc-eslint': require('eslint-plugin-jsonc') },
+                languageOptions: {
+                        parser: 'jsonc-eslint-parser',
+                        ecmaVersion: 2022,
+                        sourceType: 'script',
+                        globals: {
+                                ...globals.node,
+                        },
+                },
+                rules: {
+                        'jsonc/no-duplicate-keys': 'error',
+                        'jsonc/require-comma-before-curly': ['error', 'all'],
+                        'jsonc/require-comma-before-square': ['error', 'all'],
+                },
+        },
+        {
+                files: ['**/*.test.js'],
+                plugins: { js, chai: pluginChaiFriendly },
+                languageOptions: {
+                        globals: {
+                                ...globals.node,
+                                ...globals.mocha,
+                                ...chaiGlobals,
+                        },
+                },
+                rules: {
                         'no-unused-expressions': 'off',
                         'chai-friendly/no-unused-expressions': 'error',
                 },

@@ -2,8 +2,6 @@
 const bcrypt = require('bcrypt');
 const nconf = require('nconf');
 
-const { NotAuthenticatedError, NotAuthorizedError } = require('../helpers/errors');
-
 function isLoggedIn(req, res, next) {
         const passport = require('../auth/local');
         if (req.isAuthenticated()) {
@@ -14,10 +12,10 @@ function isLoggedIn(req, res, next) {
         // perform api authentication - all api keys are assumed to be admin
         return (
                 passport.authenticate('login-api', { session: false, failWithError: true })(req, res, next),
-                function(next) {
+                function (next) {
                         next();
                 },
-                function(res) {
+                function (res) {
                         return res.status(401).json({ error: 'Authentication failed.' });
                 }
         );
@@ -31,10 +29,10 @@ function isLoggedInMessages(req, res, next) {
         // perform api authentication - all api keys are assumed to be admin
         return (
                 passport.authenticate('login-api', { session: false, failWithError: true })(req, res, next),
-                function(next) {
+                function (next) {
                         next();
                 },
-                function(res) {
+                function (res) {
                         return res.status(401).json({ error: 'Authentication failed.' });
                 }
         );
@@ -51,10 +49,10 @@ function isAdmin(req, res, next) {
         if (!req.isAuthenticated())
                 return (
                         passport.authenticate('login-api', { session: false, failWithError: true })(req, res, next),
-                        function(next) {
+                        function (next) {
                                 next();
                         },
-                        function(res) {
+                        function (res) {
                                 return res.status(401).json({ error: 'Authentication failed.' });
                         }
                 );

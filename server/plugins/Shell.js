@@ -1,6 +1,6 @@
-var { spawn } = require('child_process');
-var fs = require('fs');
-var logger = require('../log');
+const { spawn } = require('child_process');
+const fs = require('fs');
+const logger = require('../log');
 
 async function run(trigger, scope, data, config, callback) {
         if (!data.pluginconf.Shell || !data.pluginconf.Shell.enable) return callback();
@@ -30,13 +30,13 @@ async function run(trigger, scope, data, config, callback) {
                           ])
                         : spawn('sh', [filePath + fullFileName, data.address, data.message, JSON.stringify(data)]);
 
-        child.stdout.on('data', function(stdOutData) {
+        child.stdout.on('data', function (stdOutData) {
                 logger.main.debug(`ShellScript Data: ${stdOutData}`);
         });
-        child.stderr.on('data', function(stdErrData) {
+        child.stderr.on('data', function (stdErrData) {
                 logger.main.error(`ShellScript Errors: ${stdErrData}`);
         });
-        child.on('exit', function(code) {
+        child.on('exit', function () {
                 // Exit code, ok = 0
                 logger.main.info('ShellScript finished');
         });

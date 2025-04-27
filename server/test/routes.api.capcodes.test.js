@@ -16,8 +16,8 @@ nconf.file({ file: confFile });
 nconf.load();
 
 const passportStub = require('passport-stub');
-// eslint-disable-next-line vars-on-top
-var server = require('../app');
+
+const server = require('../app');
 const db = require('../knex/knex.js');
 
 // This needs to be sorted out, use a different config file when testing?
@@ -28,7 +28,7 @@ passportStub.install(server);
 beforeEach(() =>
         db.schema
                 .hasTable('knex_migrations_lock')
-                .then(exists => {
+                .then((exists) => {
                         if (exists) return db.del().from(`knex_migrations_lock`);
                 })
                 .then(() => db.migrate.rollback())
@@ -43,7 +43,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /api/capcodes', () => {
-        it('should return all capcodes when logged in as admin', done => {
+        it('should return all capcodes when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -68,7 +68,7 @@ describe('GET /api/capcodes', () => {
                                 done();
                         });
         });
-        it('should return all capcodes when api key provided', done => {
+        it('should return all capcodes when api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -89,7 +89,7 @@ describe('GET /api/capcodes', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -104,7 +104,7 @@ describe('GET /api/capcodes', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/capcodes')
                         .end((err, res) => {
@@ -114,7 +114,7 @@ describe('GET /api/capcodes', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -129,7 +129,7 @@ describe('GET /api/capcodes', () => {
 
 describe('POST /api/capcodes', () => {
         describe('update capcode', () => {
-                it('should update a capcode when logged in as admin', done => {
+                it('should update a capcode when logged in as admin', (done) => {
                         passportStub.login({
                                 username: 'adminactive',
                                 password: 'changeme',
@@ -197,14 +197,13 @@ describe('POST /api/capcodes', () => {
                                                         );
                                                         getRes.body.ignore.should.eql(capcode.ignore);
                                                         getRes.body.onlyShowLoggedIn.should.satisfy(
-                                                                // eslint-disable-next-line eqeqeq
-                                                                val => val == capcode.onlyShowLoggedIn
+                                                                (val) => val == capcode.onlyShowLoggedIn
                                                         );
                                                         done();
                                                 });
                                 });
                 });
-                it('should update a capcode when api key provided', done => {
+                it('should update a capcode when api key provided', (done) => {
                         nconf.set('auth:keys', [
                                 {
                                         name: 'example1',
@@ -281,8 +280,7 @@ describe('POST /api/capcodes', () => {
                                                         );
                                                         getRes.body.ignore.should.eql(capcode.ignore);
                                                         getRes.body.onlyShowLoggedIn.should.satisfy(
-                                                                // eslint-disable-next-line eqeqeq
-                                                                val => val == capcode.onlyShowLoggedIn
+                                                                (val) => val == capcode.onlyShowLoggedIn
                                                         );
                                                         done();
                                                 });
@@ -290,7 +288,7 @@ describe('POST /api/capcodes', () => {
                 });
         });
         describe('create capcode', () => {
-                it('should create a new capcode when logged in as admin', done => {
+                it('should create a new capcode when logged in as admin', (done) => {
                         passportStub.login({
                                 username: 'adminactive',
                                 password: 'changeme',
@@ -358,14 +356,13 @@ describe('POST /api/capcodes', () => {
                                                         );
                                                         getRes.body.ignore.should.eql(capcode.ignore);
                                                         getRes.body.onlyShowLoggedIn.should.satisfy(
-                                                                // eslint-disable-next-line eqeqeq
-                                                                val => val == capcode.onlyShowLoggedIn
+                                                                (val) => val == capcode.onlyShowLoggedIn
                                                         );
                                                         done();
                                                 });
                                 });
                 });
-                it('should create a new capcode when api key provided', done => {
+                it('should create a new capcode when api key provided', (done) => {
                         nconf.set('auth:keys', [
                                 {
                                         name: 'example1',
@@ -442,8 +439,7 @@ describe('POST /api/capcodes', () => {
                                                         );
                                                         getRes.body.ignore.should.eql(capcode.ignore);
                                                         getRes.body.onlyShowLoggedIn.should.satisfy(
-                                                                // eslint-disable-next-line eqeqeq
-                                                                val => val == capcode.onlyShowLoggedIn
+                                                                (val) => val == capcode.onlyShowLoggedIn
                                                         );
                                                         done();
                                                 });
@@ -451,7 +447,7 @@ describe('POST /api/capcodes', () => {
                 });
         });
         describe('insuficient permissions', () => {
-                it('should return a 403 when not admin', done => {
+                it('should return a 403 when not admin', (done) => {
                         passportStub.login({
                                 username: 'useractive',
                                 password: 'changeme',
@@ -497,7 +493,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.body.should.be.a('object');
                                                         getRes.body.should.have.property('id');
                                                         getRes.body.id.should.eql(capcode.id);
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -509,7 +505,7 @@ describe('POST /api/capcodes', () => {
                                                 });
                                 });
                 });
-                it('should not create a new capcode when logged in as user', done => {
+                it('should not create a new capcode when logged in as user', (done) => {
                         passportStub.login({
                                 username: 'useractive',
                                 password: 'changeme',
@@ -553,7 +549,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.type.should.eql('application/json');
                                                         getRes.body.should.be.a('array');
                                                         // Prüfe, dass in dem Array kein Capcode enthalten ist, der eine Übereinstimmung mit dem gesendeten Capcode hat, die ID darf jedoch abweichen
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -568,7 +564,7 @@ describe('POST /api/capcodes', () => {
                 });
         });
         describe('wrong credentials', () => {
-                it('should not update a capcode with wrong api key', done => {
+                it('should not update a capcode with wrong api key', (done) => {
                         const capcode = {
                                 id: 1,
                                 address: '12345672',
@@ -610,7 +606,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.body.should.be.a('object');
                                                         getRes.body.should.have.property('id');
                                                         getRes.body.id.should.eql(capcode.id);
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -622,7 +618,7 @@ describe('POST /api/capcodes', () => {
                                                 });
                                 });
                 });
-                it('should not update a capcode when not logged in', done => {
+                it('should not update a capcode when not logged in', (done) => {
                         const capcode = {
                                 id: 1,
                                 address: '12345672',
@@ -663,7 +659,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.body.should.be.a('object');
                                                         getRes.body.should.have.property('id');
                                                         getRes.body.id.should.eql(capcode.id);
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -675,7 +671,7 @@ describe('POST /api/capcodes', () => {
                                                 });
                                 });
                 });
-                it('should not create a new capcode with wrong api key', done => {
+                it('should not create a new capcode with wrong api key', (done) => {
                         const capcode = {
                                 address: '12345673',
                                 alias: 'Newly created',
@@ -716,7 +712,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.type.should.eql('application/json');
                                                         getRes.body.should.be.a('array');
                                                         // Prüfe, dass in dem Array kein Capcode enthalten ist, der eine Übereinstimmung mit dem gesendeten Capcode hat, die ID darf jedoch abweichen
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -729,7 +725,7 @@ describe('POST /api/capcodes', () => {
                                                 });
                                 });
                 });
-                it('should not create a new capcode when not logged in', done => {
+                it('should not create a new capcode when not logged in', (done) => {
                         const capcode = {
                                 address: '12345673',
                                 alias: 'Newly created',
@@ -769,7 +765,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.type.should.eql('application/json');
                                                         getRes.body.should.be.a('array');
                                                         // Prüfe, dass in dem Array kein Capcode enthalten ist, der eine Übereinstimmung mit dem gesendeten Capcode hat, die ID darf jedoch abweichen
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -784,7 +780,7 @@ describe('POST /api/capcodes', () => {
                 });
         });
         describe('invalid request', () => {
-                it('should not update a capcode without address', done => {
+                it('should not update a capcode without address', (done) => {
                         passportStub.login({
                                 username: 'adminactive',
                                 password: 'changeme',
@@ -824,7 +820,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.body.should.be.a('object');
                                                         getRes.body.should.have.property('id');
                                                         getRes.body.id.should.eql(capcode.id);
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -836,7 +832,7 @@ describe('POST /api/capcodes', () => {
                                                 });
                                 });
                 });
-                it('should not update a capcode without alias', done => {
+                it('should not update a capcode without alias', (done) => {
                         passportStub.login({
                                 username: 'adminactive',
                                 password: 'changeme',
@@ -881,7 +877,7 @@ describe('POST /api/capcodes', () => {
                                                         getRes.body.should.be.a('object');
                                                         getRes.body.should.have.property('id');
                                                         getRes.body.id.should.eql(capcode.id);
-                                                        getRes.body.should.not.satisfy(retCapcode => {
+                                                        getRes.body.should.not.satisfy((retCapcode) => {
                                                                 delete capcode.pluginconf;
                                                                 const comparator = _.pick(
                                                                         retCapcode,
@@ -897,7 +893,7 @@ describe('POST /api/capcodes', () => {
 });
 
 describe('GET /api/capcodes/:id', () => {
-        it('should return specific capcode when logged in as admin', done => {
+        it('should return specific capcode when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -927,7 +923,7 @@ describe('GET /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return blank capcode when id is new when logged in as admin', done => {
+        it('should return blank capcode when id is new when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -957,7 +953,7 @@ describe('GET /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return specific capcode when api key provided', done => {
+        it('should return specific capcode when api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/2')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -983,7 +979,7 @@ describe('GET /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return blank capcode when id is new when api key provided', done => {
+        it('should return blank capcode when id is new when api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/new')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -1009,7 +1005,7 @@ describe('GET /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1023,7 +1019,7 @@ describe('GET /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/2')
                         .end((err, res) => {
@@ -1033,7 +1029,7 @@ describe('GET /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/2')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -1049,7 +1045,7 @@ describe('GET /api/capcodes/:id', () => {
 describe('POST /api/capcodes/:id', () => {});
 
 describe('DELETE /api/capcodes/:id', () => {
-        it('should delete a capcode when logged in as admin', done => {
+        it('should delete a capcode when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -1063,7 +1059,7 @@ describe('DELETE /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should delete a capcode when api key is provided', done => {
+        it('should delete a capcode when api key is provided', (done) => {
                 chai.request(server)
                         .delete('/api/capcodes/2')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -1073,7 +1069,7 @@ describe('DELETE /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1088,7 +1084,7 @@ describe('DELETE /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .delete('/api/capcodes/2')
                         .end((err, res) => {
@@ -1098,7 +1094,7 @@ describe('DELETE /api/capcodes/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .delete('/api/capcodes/2')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -1112,7 +1108,7 @@ describe('DELETE /api/capcodes/:id', () => {
 });
 
 describe('GET /api/capcodes/agency', () => {
-        it('should return all agencies when logged in as admin', done => {
+        it('should return all agencies when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -1130,7 +1126,7 @@ describe('GET /api/capcodes/agency', () => {
                                 done();
                         });
         });
-        it('should return all capcodes when api key provided', done => {
+        it('should return all capcodes when api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/agency')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -1144,7 +1140,7 @@ describe('GET /api/capcodes/agency', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1159,7 +1155,7 @@ describe('GET /api/capcodes/agency', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/agency')
                         .end((err, res) => {
@@ -1169,7 +1165,7 @@ describe('GET /api/capcodes/agency', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/agency')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -1183,7 +1179,7 @@ describe('GET /api/capcodes/agency', () => {
 });
 
 describe('GET /api/capcodes/agency/:id', () => {
-        it('should return all capcodes with specific agency when logged in as admin', done => {
+        it('should return all capcodes with specific agency when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -1215,7 +1211,7 @@ describe('GET /api/capcodes/agency/:id', () => {
                                 done();
                         });
         });
-        it('should return all capcodes with specific agency when api key provided', done => {
+        it('should return all capcodes with specific agency when api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/agency/FIRE')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -1243,7 +1239,7 @@ describe('GET /api/capcodes/agency/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1258,7 +1254,7 @@ describe('GET /api/capcodes/agency/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/agency/FIRE')
                         .end((err, res) => {
@@ -1268,7 +1264,7 @@ describe('GET /api/capcodes/agency/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodes/agency/FIRE')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -1282,7 +1278,7 @@ describe('GET /api/capcodes/agency/:id', () => {
 });
 
 describe('GET /api/capcodeCheck/:id', () => {
-        it('should return a capcode when address exists and logged in as admin', done => {
+        it('should return a capcode when address exists and logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -1312,7 +1308,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                                 done();
                         });
         });
-        it('should return blank capcode when address doesnt exist and logged in as admin', done => {
+        it('should return blank capcode when address doesnt exist and logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -1342,7 +1338,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                                 done();
                         });
         });
-        it('should return a capcode when address exists and apikey provided', done => {
+        it('should return a capcode when address exists and apikey provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodeCheck/1234568')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -1368,7 +1364,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                                 done();
                         });
         });
-        it('should return blank capcode when address doesnt exist and apikey provided', done => {
+        it('should return blank capcode when address doesnt exist and apikey provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodeCheck/7654321')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -1394,7 +1390,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1409,7 +1405,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/capcodeCheck/1234567')
                         .end((err, res) => {
@@ -1419,7 +1415,7 @@ describe('GET /api/capcodeCheck/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/capcodeCheck/1234567')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -1433,7 +1429,7 @@ describe('GET /api/capcodeCheck/:id', () => {
 });
 
 describe('POST /api/capcodeRefresh', () => {
-        it('should perform a capcode refresh when admin', done => {
+        it('should perform a capcode refresh when admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -1449,7 +1445,7 @@ describe('POST /api/capcodeRefresh', () => {
                                 done();
                         });
         });
-        it('should perform a capcode refresh when apikey provided', done => {
+        it('should perform a capcode refresh when apikey provided', (done) => {
                 chai.request(server)
                         .post('/api/capcodeRefresh')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -1461,7 +1457,7 @@ describe('POST /api/capcodeRefresh', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1476,7 +1472,7 @@ describe('POST /api/capcodeRefresh', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .post('/api/capcodeRefresh')
                         .end((err, res) => {
@@ -1486,7 +1482,7 @@ describe('POST /api/capcodeRefresh', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .post('/api/capcodeRefresh')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -1500,7 +1496,7 @@ describe('POST /api/capcodeRefresh', () => {
 });
 
 describe('POST /api/capcodeExport', () => {
-        it('should perform a capcode export when admin', done => {
+        it('should perform a capcode export when admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -1517,7 +1513,7 @@ describe('POST /api/capcodeExport', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -1532,7 +1528,7 @@ describe('POST /api/capcodeExport', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .post('/api/capcodeExport')
                         .end((err, res) => {
@@ -1542,7 +1538,7 @@ describe('POST /api/capcodeExport', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .post('/api/capcodeExport')
                         .set('apikey', 'shortkeythatdoesntexist')

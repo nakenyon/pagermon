@@ -1,6 +1,6 @@
 const nconf = require('nconf');
 
-exports.up = async function(db) {
+exports.up = async function (db) {
         const dbtype = nconf.get('database:type');
         if (dbtype !== 'sqlite3') return 'Not required';
         return Promise.all([
@@ -43,7 +43,7 @@ exports.up = async function(db) {
         ]);
 };
 
-exports.down = function(db) {
+exports.down = function (db) {
         const dbtype = nconf.get('database:type');
         if (dbtype !== 'sqlite3') return 'Not required';
         return Promise.all([

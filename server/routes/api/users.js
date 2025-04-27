@@ -1,13 +1,11 @@
-/* eslint-disable no-restricted-globals */
 const express = require('express');
 const _ = require('underscore');
-const { InvalidRequestError, RequiredFieldMissingError, ResourceNotFoundError } = require('../../helpers/errors');
+const { InvalidRequestError, RequiredFieldMissingError } = require('../../helpers/errors');
 
 const bcrypt = require('bcrypt');
 const db = require('../../knex/knex');
 const authHelper = require('../../middleware/authhelper');
 const logger = require('../../log');
-const nconf = require('nconf');
 
 const router = express.Router();
 
@@ -43,11 +41,7 @@ async function getSingleUser(filter) {
         if (!filter) return defaults;
 
         const filterCleaned = _.pick(filter, ['id', 'username', 'email']);
-        const user = await db
-                .from('users')
-                .select('*')
-                .where(filterCleaned)
-                .first();
+        const user = await db.from('users').select('*').where(filterCleaned).first();
 
         return user || defaults;
 }
@@ -74,7 +68,7 @@ async function modifyUser(user) {
 
         const insertResult = await db
                 .from('users')
-                .modify(qb => {
+                .modify((qb) => {
                         if (update) qb.update(insertion).where('id', '=', insertion.id);
                         else qb.insert(insertion);
                 })
@@ -86,7 +80,7 @@ async function modifyUser(user) {
 }
 
 router.route('/user')
-        .get(authHelper.isAdmin, async function(req, res, next) {
+        .get(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         const users = await db
                                 .from('users')
@@ -105,7 +99,7 @@ router.route('/user')
                         next(error);
                 }
         })
-        .post(authHelper.isAdmin, async function(req, res, next) {
+        .post(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         if (!req.body.username) throw new RequiredFieldMissingError('username');
                         if (!req.body.email) throw new RequiredFieldMissingError('email');
@@ -158,7 +152,7 @@ router.route('/user')
         });
 
 router.route('/user/:id')
-        .get(authHelper.isAdmin, async function(req, res, next) {
+        .get(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         const { id } = req.params;
                         if (id === 'new') return res.json(await getSingleUser(false));
@@ -167,7 +161,7 @@ router.route('/user/:id')
                         next(error);
                 }
         })
-        .post(authHelper.isAdmin, async function(req, res, next) {
+        .post(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         const parsedId = req.params.id || req.body.id || null;
                         if (!parsedId) throw new RequiredFieldMissingError('id');
@@ -178,10 +172,7 @@ router.route('/user/:id')
                                 if (idList.some(isNaN)) throw new InvalidRequestError('Id list contained non-numbers');
                                 // ADD CHECK TO NOT ALLOW DELETION OF USERID 1
                                 logger.main.info(`Deleting: ${idList}`);
-                                await db
-                                        .from('users')
-                                        .del()
-                                        .where('id', 'in', idList);
+                                await db.from('users').del().where('id', 'in', idList);
                                 return res.status(200).send({ status: 'ok' });
                         }
 
@@ -210,16 +201,13 @@ router.route('/user/:id')
                         next(error);
                 }
         })
-        .delete(authHelper.isAdmin, async function(req, res, next) {
+        .delete(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         const id = parseInt(req.params.id, 10);
                         if (id === 1) throw new InvalidRequestError('User ID 1 is protected');
 
                         logger.main.info(`Deleting User ${id}`);
-                        await db
-                                .from('users')
-                                .del()
-                                .where('id', id);
+                        await db.from('users').del().where('id', id);
 
                         res.status(200).send({ status: 'ok' });
                 } catch (error) {
@@ -227,7 +215,7 @@ router.route('/user/:id')
                 }
         });
 
-router.route('/userCheck/username/:username').get(authHelper.isAdmin, async function(req, res, next) {
+router.route('/userCheck/username/:username').get(authHelper.isAdmin, async function (req, res, next) {
         try {
                 const { username } = req.params;
                 const user = await getSingleUser({ username });
@@ -237,7 +225,7 @@ router.route('/userCheck/username/:username').get(authHelper.isAdmin, async func
         }
 });
 
-router.route('/userCheck/email/:email').get(authHelper.isAdmin, async function(req, res, next) {
+router.route('/userCheck/email/:email').get(authHelper.isAdmin, async function (req, res, next) {
         try {
                 const { email } = req.params;
                 const user = await getSingleUser({ email });
@@ -247,4 +235,4 @@ router.route('/userCheck/email/:email').get(authHelper.isAdmin, async function(r
         }
 });
 
-module.exports = router;
+module.exports = { router };

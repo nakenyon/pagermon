@@ -1,8 +1,8 @@
-var Twit = require('twit');
-var logger = require('../log');
+const Twit = require('twit');
+const logger = require('../log');
 
 function run(trigger, scope, data, config, callback) {
-        var tConf = data.pluginconf.Twitter;
+        const tConf = data.pluginconf.Twitter;
         if (!tConf || !tConf.enable) return callback();
         if (
                 config.consKey === 0 ||
@@ -45,7 +45,7 @@ function run(trigger, scope, data, config, callback) {
                         {
                                 status: post + (i === posts.length - 1 ? '' : spacer),
                         },
-                        function(err, data, response) {
+                        function (err) {
                                 if (err) {
                                         logger.main.error(`Twitter: ${err}`);
                                 } else {

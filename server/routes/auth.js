@@ -24,7 +24,7 @@ const store = new BruteKnex({
         tablename: 'protection',
 });
 
-const lockoutCallback = function(req, res, next, nextValidRequestDate) {
+const lockoutCallback = function (req, res, next, nextValidRequestDate) {
         res.status(429).send({ status: 'lockedout', error: 'Too many attempts, please try again later' });
         logger.auth.info(`Lockout: ${req.ip} Next Valid: ${nextValidRequestDate}`);
 };
@@ -66,7 +66,7 @@ router.route('/login')
                                 logger.auth.error(err);
                                 return res.status(500).send({ status: 'failed', error: 'An Error Occured' });
                         }
-                        req.logIn(user, async function(err) {
+                        req.logIn(user, async function (err) {
                                 if (err) {
                                         logger.auth.debug(`Failed login ${JSON.stringify(user)} ${err}`);
                                         return res.status(401).send({
@@ -81,12 +81,9 @@ router.route('/login')
                                 const currentDatetime = moment(currentTimestamp * 1000).format('YYYY-MM-DD HH:mm:ss');
 
                                 try {
-                                        await db
-                                                .from('users')
-                                                .where('id', '=', id)
-                                                .update({
-                                                        lastlogondate: currentDatetime,
-                                                });
+                                        await db.from('users').where('id', '=', id).update({
+                                                lastlogondate: currentDatetime,
+                                        });
                                 } catch (error) {
                                         logger.db.error(error);
                                 }
@@ -109,7 +106,7 @@ router.route('/login')
         });
 
 router.route('/logout').get(authHelper.isLoggedIn, function getLogout(req, res, next) {
-        req.logout(function(err) {
+        req.logout(function (err) {
                 if (err) {
                         return next(err);
                 }
@@ -136,7 +133,7 @@ router.route('/profile/:id')
                         if (!user) res.status(404).json({ status: 'failed', error: 'User not found' });
 
                         res.json(user);
-                } catch (error) {
+                } catch {
                         res.status(500).json({ status: 'failed', error: '' });
                         logger.auth.error('failed to select user');
                 }
@@ -230,7 +227,7 @@ router.route('/register')
                                                 redirect: '/auth/register',
                                         });
                                 }
-                                req.logIn(user, function(err) {
+                                req.logIn(user, function (err) {
                                         if (err) {
                                                 logger.auth.error(err);
                                                 return res.status(500).json({
@@ -286,13 +283,9 @@ router.route('/reset')
                 // need to update this query to select the user first then update.
 
                 try {
-                        await db
-                                .from('users')
-                                .returning('id')
-                                .where('id', '=', userId)
-                                .update({
-                                        password: hash,
-                                });
+                        await db.from('users').returning('id').where('id', '=', userId).update({
+                                password: hash,
+                        });
 
                         res.status(200).send({ status: 'ok', redirect: '/' });
                         logger.auth.debug(`${req.user.username} Password Reset Successfully`);
@@ -302,46 +295,37 @@ router.route('/reset')
                 }
         });
 
-router.route('/userCheck/username/:username').get(bruteforcedupe.prevent, async function getUserCheckUsername(
-        req,
-        res,
-        next
-) {
-        const { username } = req.params;
+router.route('/userCheck/username/:username').get(
+        bruteforcedupe.prevent,
+        async function getUserCheckUsername(req, res, next) {
+                const { username } = req.params;
 
-        try {
-                const existingUser = await db
-                        .from('users')
-                        .select('username')
-                        .where({ username })
-                        .first();
+                try {
+                        const existingUser = await db.from('users').select('username').where({ username }).first();
 
-                const rowSend = existingUser || {
-                        username: '',
-                        password: '',
-                        givenname: '',
-                        surname: '',
-                        email: '',
-                        role: 'user',
-                        status: 'active',
-                };
+                        const rowSend = existingUser || {
+                                username: '',
+                                password: '',
+                                givenname: '',
+                                surname: '',
+                                email: '',
+                                role: 'user',
+                                status: 'active',
+                        };
 
-                return res.json(rowSend);
-        } catch (error) {
-                logger.main.error(error);
-                return next(error);
+                        return res.json(rowSend);
+                } catch (error) {
+                        logger.main.error(error);
+                        return next(error);
+                }
         }
-});
+);
 
 router.route('/userCheck/email/:email').get(bruteforcedupe.prevent, async function getUserCheckEmail(req, res, next) {
         const { email } = req.params;
 
         try {
-                const existingUser = await db
-                        .from('users')
-                        .select('email')
-                        .where('email', email)
-                        .first();
+                const existingUser = await db.from('users').select('email').where('email', email).first();
 
                 const rowSend = existingUser || {
                         username: '',

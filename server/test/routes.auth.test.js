@@ -25,7 +25,7 @@ nconf.load();
 beforeEach(() =>
         db.schema
                 .hasTable('knex_migrations_lock')
-                .then(exists => {
+                .then((exists) => {
                         if (exists) return db.del().from(`knex_migrations_lock`);
                 })
                 .then(() => db.migrate.rollback())
@@ -42,7 +42,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /auth/login', () => {
-        it('should return the login page', done => {
+        it('should return the login page', (done) => {
                 chai.request(server)
                         .get('/auth/login')
                         .end((err, res) => {
@@ -52,7 +52,7 @@ describe('GET /auth/login', () => {
                                 done();
                         });
         });
-        it('should return the index if a user is logged in', done => {
+        it('should return the index if a user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -70,7 +70,7 @@ describe('GET /auth/login', () => {
 });
 
 describe('POST /auth/login', () => {
-        it('should log the user in if correct credentials are provided', done => {
+        it('should log the user in if correct credentials are provided', (done) => {
                 chai.request(server)
                         .post('/auth/login')
                         .send({
@@ -85,7 +85,7 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
-        it('should log the admin in if correct credentials are provided', done => {
+        it('should log the admin in if correct credentials are provided', (done) => {
                 chai.request(server)
                         .post('/auth/login')
                         .send({
@@ -100,7 +100,7 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
-        it('should not login on invalid username', done => {
+        it('should not login on invalid username', (done) => {
                 chai.request(server)
                         .post('/auth/login')
                         .send({
@@ -115,7 +115,7 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
-        it('should not login on invalid password', done => {
+        it('should not login on invalid password', (done) => {
                 chai.request(server)
                         .post('/auth/login')
                         .send({
@@ -130,7 +130,7 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
-        it('should not login with no password provided', done => {
+        it('should not login with no password provided', (done) => {
                 chai.request(server)
                         .post('/auth/login')
                         .send({
@@ -144,7 +144,7 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
-        it('should not login with no username provided', done => {
+        it('should not login with no username provided', (done) => {
                 chai.request(server)
                         .post('/auth/login')
                         .send({
@@ -158,7 +158,7 @@ describe('POST /auth/login', () => {
                                 done();
                         });
         });
-        it('should not login when user is disabled', done => {
+        it('should not login when user is disabled', (done) => {
                 chai.request(server)
                         .post('/auth/login')
                         .send({
@@ -175,13 +175,10 @@ describe('POST /auth/login', () => {
         });
         it('should return a 429 with too many invalid attempts', async () => {
                 for (let i = 0; i < 6; i += 1) {
-                        await chai
-                                .request(server)
-                                .post('/auth/login')
-                                .send({
-                                        username: 'useractive',
-                                        password: 'useractive',
-                                });
+                        await chai.request(server).post('/auth/login').send({
+                                username: 'useractive',
+                                password: 'useractive',
+                        });
                 }
 
                 chai.request(server)
@@ -201,7 +198,7 @@ describe('POST /auth/login', () => {
 });
 
 describe('GET /auth/logout', () => {
-        it('should log the user out', done => {
+        it('should log the user out', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -218,7 +215,7 @@ describe('GET /auth/logout', () => {
 });
 
 describe('GET /auth/profile', () => {
-        it('should return the profile page if user is logged in', done => {
+        it('should return the profile page if user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -232,7 +229,7 @@ describe('GET /auth/profile', () => {
                                 done();
                         });
         });
-        it('should return an error if not logged in ', done => {
+        it('should return an error if not logged in ', (done) => {
                 chai.request(server)
                         .get('/auth/profile')
                         .end((err, res) => {
@@ -244,7 +241,7 @@ describe('GET /auth/profile', () => {
 });
 
 describe('GET /auth/profile/:id', () => {
-        it('should return the information of the logged in user', done => {
+        it('should return the information of the logged in user', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -268,7 +265,7 @@ describe('GET /auth/profile/:id', () => {
                                 done();
                         });
         });
-        it('should not return the information of other users', done => {
+        it('should not return the information of other users', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -293,7 +290,7 @@ describe('GET /auth/profile/:id', () => {
                                 done();
                         });
         });
-        it('should not return anything if no user is logged in', done => {
+        it('should not return anything if no user is logged in', (done) => {
                 chai.request(server)
                         .get('/auth/profile/2')
                         .send({ 'user.username': 'adminactive' })
@@ -306,7 +303,7 @@ describe('GET /auth/profile/:id', () => {
 });
 
 describe('POST /auth/profile/:id', () => {
-        it('should save the information of the logged in user', done => {
+        it('should save the information of the logged in user', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -327,7 +324,7 @@ describe('POST /auth/profile/:id', () => {
                                 done();
                         });
         });
-        it('should not allow saving of other users information', done => {
+        it('should not allow saving of other users information', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -347,7 +344,7 @@ describe('POST /auth/profile/:id', () => {
                                 done();
                         });
         });
-        it('should not allow saving of invalid information', done => {
+        it('should not allow saving of invalid information', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -366,7 +363,7 @@ describe('POST /auth/profile/:id', () => {
                                 done();
                         });
         });
-        it('should not allow saving of information if no user is logged in ', done => {
+        it('should not allow saving of information if no user is logged in ', (done) => {
                 chai.request(server)
                         .post('/auth/profile/1')
                         .send({
@@ -386,7 +383,7 @@ describe('POST /auth/profile/:id', () => {
 describe('GET /auth/register', () => {
         nconf.set('auth:registration', true);
         nconf.save();
-        it('should return the registration page if enabled', done => {
+        it('should return the registration page if enabled', (done) => {
                 chai.request(server)
                         .get('/auth/register')
                         .end((err, res) => {
@@ -397,7 +394,7 @@ describe('GET /auth/register', () => {
                         });
         });
 
-        it('should return the index if disabled', done => {
+        it('should return the index if disabled', (done) => {
                 nconf.set('auth:registration', false);
                 nconf.save();
                 chai.request(server)
@@ -413,7 +410,7 @@ describe('GET /auth/register', () => {
 });
 
 describe('POST /auth/register', () => {
-        it('should register a new user', done => {
+        it('should register a new user', (done) => {
                 nconf.set('auth:registration', true);
                 nconf.save();
                 chai.request(server)
@@ -433,7 +430,7 @@ describe('POST /auth/register', () => {
                                 done();
                         });
         });
-        it('should not register a duplicate user', done => {
+        it('should not register a duplicate user', (done) => {
                 chai.request(server)
                         .post('/auth/register')
                         .send({
@@ -450,7 +447,7 @@ describe('POST /auth/register', () => {
                                 done();
                         });
         });
-        it('should not allow registration when registration is disabled in config', done => {
+        it('should not allow registration when registration is disabled in config', (done) => {
                 nconf.set('auth:registration', false);
                 nconf.save();
                 chai.request(server)
@@ -469,7 +466,7 @@ describe('POST /auth/register', () => {
                                 done();
                         });
         });
-        it('should not register a user with invalid data', done => {
+        it('should not register a user with invalid data', (done) => {
                 nconf.set('auth:registration', true);
                 nconf.save();
                 chai.request(server)
@@ -488,7 +485,7 @@ describe('POST /auth/register', () => {
                                 done();
                         });
         });
-        it('should not register a user with invalid data', done => {
+        it('should not register a user with invalid data', (done) => {
                 nconf.set('auth:registration', true);
                 nconf.save();
                 chai.request(server)
@@ -511,7 +508,7 @@ describe('POST /auth/register', () => {
 });
 
 describe('GET /auth/reset', () => {
-        it('should return the reset page if user is logged in', done => {
+        it('should return the reset page if user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -525,7 +522,7 @@ describe('GET /auth/reset', () => {
                                 done();
                         });
         });
-        it('should redirect to login page if no user logged in', done => {
+        it('should redirect to login page if no user logged in', (done) => {
                 chai.request(server)
                         .get('/auth/reset')
                         .redirects(0)
@@ -538,7 +535,7 @@ describe('GET /auth/reset', () => {
 });
 
 describe('POST /auth/reset', () => {
-        it('should reset the password', done => {
+        it('should reset the password', (done) => {
                 passportStub.login({
                         // hard set the ID as the query on the route doesn't lookup id's. This should be fixed in auth.js
                         id: '2',
@@ -558,7 +555,7 @@ describe('POST /auth/reset', () => {
                                 done();
                         });
         });
-        it('should not accept the same password', done => {
+        it('should not accept the same password', (done) => {
                 passportStub.login({
                         // hard set the ID as the query on the route doesn't lookup id's. This should be fixed in auth.js
                         id: '2',
@@ -578,7 +575,7 @@ describe('POST /auth/reset', () => {
                                 done();
                         });
         });
-        it('should not accept a short password', done => {
+        it('should not accept a short password', (done) => {
                 passportStub.login({
                         // hard set the ID as the query on the route doesn't lookup id's. This should be fixed in auth.js
                         id: '2',
@@ -601,7 +598,7 @@ describe('POST /auth/reset', () => {
 });
 
 describe('GET /auth/userCheck/username/:id', () => {
-        it('should return an username if the submitted username exists', done => {
+        it('should return an username if the submitted username exists', (done) => {
                 chai.request(server)
                         .get('/auth/userCheck/username/useractive')
                         .end((err, res) => {
@@ -612,7 +609,7 @@ describe('GET /auth/userCheck/username/:id', () => {
                                 done();
                         });
         });
-        it('should return an empty username if the submitted username does not exist', done => {
+        it('should return an empty username if the submitted username does not exist', (done) => {
                 chai.request(server)
                         .get('/auth/userCheck/username/idontexist')
                         .end((err, res) => {
@@ -626,7 +623,7 @@ describe('GET /auth/userCheck/username/:id', () => {
 });
 
 describe('GET /auth/userCheck/email/:id', () => {
-        it('should return an email if the submitted email exists', done => {
+        it('should return an email if the submitted email exists', (done) => {
                 chai.request(server)
                         .get('/auth/userCheck/email/none1@none.com')
                         .end((err, res) => {
@@ -637,7 +634,7 @@ describe('GET /auth/userCheck/email/:id', () => {
                                 done();
                         });
         });
-        it('should return an empty email if the submitted email does not exist', done => {
+        it('should return an empty email if the submitted email does not exist', (done) => {
                 chai.request(server)
                         .get('/auth/userCheck/email/idontexist@none.com')
                         .end((err, res) => {

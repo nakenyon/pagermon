@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-globals */
 const express = require('express');
 const _ = require('underscore');
 const { InvalidRequestError, RequiredFieldMissingError, ResourceNotFoundError } = require('../../helpers/errors');
@@ -46,11 +45,7 @@ async function getSingleCapcode(filter) {
         if (!filter) return defaults;
 
         const filterCleaned = _.pick(filter, ['id', 'address']);
-        const capcode = await db
-                .from('capcodes')
-                .select('*')
-                .where(filterCleaned)
-                .first();
+        const capcode = await db.from('capcodes').select('*').where(filterCleaned).first();
 
         if (!capcode) return defaults;
 
@@ -69,11 +64,11 @@ async function getAllCapcodes(modifier) {
         const capcodes = await db
                 .from('capcodes')
                 .select('*')
-                .modify(qb => {
+                .modify((qb) => {
                         if (modifier) modifier(qb);
                 });
 
-        return capcodes.map(capcode => {
+        return capcodes.map((capcode) => {
                 capcode.pluginconf = parseJSON(capcode.pluginconf);
                 return capcode;
         });
@@ -102,7 +97,7 @@ async function modifyCapcode(capcode) {
 
         const insertResult = await db
                 .from('capcodes')
-                .modify(qb => {
+                .modify((qb) => {
                         if (update) qb.update(insertion).where('id', '=', insertion.id);
                         else qb.insert(insertion);
                 })
@@ -124,15 +119,15 @@ async function modifyCapcode(capcode) {
  */
 async function performCapcodeRefresh(filter) {
         await db('messages')
-                .modify(qb => {
+                .modify((qb) => {
                         if (filter?.addresses)
-                                filter.addresses.forEach(address => {
+                                filter.addresses.forEach((address) => {
                                         qb.orWhere('messages.address', 'like', address);
                                 });
 
                         if (filter?.ids) qb.orWhereIn('messages.alias_id', filter.ids);
                 })
-                .update('alias_id', function() {
+                .update('alias_id', function () {
                         this.select('id')
                                 .from('capcodes')
                                 .where('messages.address', 'like', 'capcodes.address')
@@ -162,12 +157,12 @@ function parseJSON(json) {
  * @returns A sanitized version of the plugin configuration object holding only plugins with values set
  */
 function vaccumPluginConf(pconf) {
-        const cleaned = _.pick(pconf, p => Object.keys(p).length > 0);
+        const cleaned = _.pick(pconf, (p) => Object.keys(p).length > 0);
         return cleaned;
 }
 
 router.route('/capcodes')
-        .get(authHelper.isAdmin, async function(req, res, next) {
+        .get(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         const capcodes = await db
                                 .from('capcodes')
@@ -179,7 +174,7 @@ router.route('/capcodes')
                         next(e);
                 }
         })
-        .post(authHelper.isAdmin, async function(req, res, next) {
+        .post(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         if (!req.body.address) throw new RequiredFieldMissingError('address');
                         if (!req.body.alias) throw new RequiredFieldMissingError('alias');
@@ -228,7 +223,7 @@ router.route('/capcodes')
         });
 
 // TODO: Should maybe better be an individual route
-router.route('/capcodes/agency').get(authHelper.isAdmin, async function(req, res, next) {
+router.route('/capcodes/agency').get(authHelper.isAdmin, async function (req, res, next) {
         try {
                 const agencies = await db.from('capcodes').distinct('agency');
                 res.json(agencies);
@@ -237,15 +232,10 @@ router.route('/capcodes/agency').get(authHelper.isAdmin, async function(req, res
         }
 });
 
-router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(req, res, next) {
+router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function (req, res, next) {
         try {
                 const { agency } = req.params;
-                const capcodes = (
-                        await db
-                                .from('capcodes')
-                                .select('*')
-                                .where({ agency })
-                ).map(capcode => {
+                const capcodes = (await db.from('capcodes').select('*').where({ agency })).map((capcode) => {
                         capcode.pluginconf = parseJSON(capcode.pluginconf);
                         return capcode;
                 });
@@ -256,7 +246,7 @@ router.route('/capcodes/agency/:agency').get(authHelper.isAdmin, async function(
 });
 
 router.route('/capcodes/:id')
-        .get(authHelper.isAdmin, async function(req, res, next) {
+        .get(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         const { id } = req.params;
                         res.json(await getSingleCapcode(id === 'new' ? false : { id }));
@@ -264,7 +254,7 @@ router.route('/capcodes/:id')
                         next(e);
                 }
         })
-        .post(authHelper.isAdmin, async function(req, res, next) {
+        .post(authHelper.isAdmin, async function (req, res, next) {
                 // TODO: Add tests!
                 try {
                         const id = req.params.id || req.body.id || null;
@@ -274,14 +264,10 @@ router.route('/capcodes/:id')
                         if (id === 'deleteMultiple') {
                                 const idList = req.body.deleteList;
                                 if (idList.length === 0) throw RequiredFieldMissingError('deleteList entries');
-                                if (idList.some(isNaN))
-                                        throw InvalidRequestError('Id list contained non-numbers');
+                                if (idList.some(isNaN)) throw InvalidRequestError('Id list contained non-numbers');
 
                                 logger.main.info(`Deleting: ${idList}`);
-                                await db
-                                        .from('capcodes')
-                                        .del()
-                                        .where('id', 'in', idList);
+                                await db.from('capcodes').del().where('id', 'in', idList);
 
                                 nconf.set('database:aliasRefreshRequired', 1);
                                 nconf.save();
@@ -330,7 +316,7 @@ router.route('/capcodes/:id')
                         next(e);
                 }
         })
-        .delete(authHelper.isAdmin, async function(req, res, next) {
+        .delete(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         if (!req.params.id) throw new RequiredFieldMissingError('capcode id');
                         const { id } = req.params;
@@ -340,10 +326,7 @@ router.route('/capcodes/:id')
 
                         if (!capcode) throw new ResourceNotFoundError('Capcode not found');
 
-                        await db
-                                .from('capcodes')
-                                .del()
-                                .where('id', req.params.id);
+                        await db.from('capcodes').del().where('id', req.params.id);
 
                         res.status(200).send({ status: 'ok' });
                         performCapcodeRefresh({ ids: [req.params.id], addresses: [capcode.address] }).then();
@@ -352,7 +335,7 @@ router.route('/capcodes/:id')
                 }
         });
 
-router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(req, res, next) {
+router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function (req, res, next) {
         try {
                 const { address } = req.params;
                 res.json(await getSingleCapcode({ address }));
@@ -362,7 +345,7 @@ router.route('/capcodeCheck/:address').get(authHelper.isAdmin, async function(re
 });
 
 // TODO: Add tests
-router.route('/capcodeRefresh').post(authHelper.isAdmin, async function(req, res, next) {
+router.route('/capcodeRefresh').post(authHelper.isAdmin, async function (req, res, next) {
         try {
                 await performCapcodeRefresh();
                 nconf.set('database:aliasRefreshRequired', 0);
@@ -374,9 +357,9 @@ router.route('/capcodeRefresh').post(authHelper.isAdmin, async function(req, res
 });
 
 // TODO: This should be a GET request!
-router.route('/capcodeExport').post(authHelper.isAdmin, async function(req, res, next) {
+router.route('/capcodeExport').post(authHelper.isAdmin, async function (req, res, next) {
         try {
-                const capcodes = await getAllCapcodes(qb => {
+                const capcodes = await getAllCapcodes((qb) => {
                         qb.orderByRaw(`REPLACE(??, ?, ?)`, ['address', '_', '%']);
                 });
                 const data = await converter.json2csv(capcodes);
@@ -387,10 +370,10 @@ router.route('/capcodeExport').post(authHelper.isAdmin, async function(req, res,
 });
 
 // TODO: Add tests
-router.route('/capcodeImport').post(authHelper.isAdmin, async function(req, res, next) {
+router.route('/capcodeImport').post(authHelper.isAdmin, async function (req, res, next) {
         try {
                 // remove newline chars from dataset - yes i realise we are adding them in admin.main.js, it doesn't submit without them.
-                const withoutNewLines = req.body.keys.map(key => req.body[key].replace(/[\r\n]/g, ''));
+                const withoutNewLines = req.body.keys.map((key) => req.body[key].replace(/[\r\n]/g, ''));
 
                 // join data but remove the last newline to prevent the last one being malformed.
                 const importData = withoutNewLines.join('\n').slice(0, -1);
@@ -407,7 +390,7 @@ router.route('/capcodeImport').post(authHelper.isAdmin, async function(req, res,
                 };
 
                 const importResults = await Promise.all(
-                        data.map(async capcode => {
+                        data.map(async (capcode) => {
                                 if (!capcode.address || !capcode.alias) {
                                         return Promise.resolve({
                                                 address: capcode.address,
@@ -460,4 +443,4 @@ router.route('/capcodeImport').post(authHelper.isAdmin, async function(req, res,
         }
 });
 
-module.exports = router;
+module.exports = { router, performCapcodeRefresh };

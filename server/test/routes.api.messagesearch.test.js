@@ -15,8 +15,8 @@ nconf.file({ file: confFile });
 nconf.load();
 
 const passportStub = require('passport-stub');
-// eslint-disable-next-line vars-on-top
-var server = require('../app');
+
+const server = require('../app');
 const db = require('../knex/knex.js');
 
 passportStub.install(server);
@@ -25,7 +25,7 @@ passportStub.install(server);
 beforeEach(() =>
         db.schema
                 .hasTable('knex_migrations_lock')
-                .then(exists => {
+                .then((exists) => {
                         if (exists) return db.del().from(`knex_migrations_lock`);
                 })
                 .then(() => db.migrate.rollback())
@@ -40,7 +40,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /api/messageSearch', () => {
-        it('should return result for existing term', done => {
+        it('should return result for existing term', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?q=test')
                         .end((err, res) => {
@@ -57,7 +57,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for non-existing term', done => {
+        it('should not return result for non-existing term', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?q=thisisnotmessage')
                         .end((err, res) => {
@@ -69,7 +69,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should return result for existing alias', done => {
+        it('should return result for existing alias', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=1')
                         .end((err, res) => {
@@ -88,7 +88,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should return result for message missing alias', done => {
+        it('should return result for message missing alias', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=-1')
                         .end((err, res) => {
@@ -104,7 +104,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for alias with no messages', done => {
+        it('should not return result for alias with no messages', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=4')
                         .end((err, res) => {
@@ -116,7 +116,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for non-existing alias', done => {
+        it('should not return result for non-existing alias', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?alias=18')
                         .end((err, res) => {
@@ -128,7 +128,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should return result for existing address', done => {
+        it('should return result for existing address', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?address=1234569')
                         .end((err, res) => {
@@ -145,7 +145,7 @@ describe('GET /api/messageSearch', () => {
                                 done();
                         });
         });
-        it('should not return result for non-existing address', done => {
+        it('should not return result for non-existing address', (done) => {
                 chai.request(server)
                         .get('/api/messageSearch?address=1234585')
                         .end((err, res) => {

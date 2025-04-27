@@ -13,7 +13,7 @@ function createLogger(name, options) {
                         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
                         format.prettyPrint(),
                         format.printf(
-                                info =>
+                                (info) =>
                                         options?.format ||
                                         `${info.label}  ${info.timestamp}  ${info.level} : ${info.message}`
                         )
@@ -39,7 +39,7 @@ createLogger('pagermon', {
 });
 
 createLogger('http', {
-        format: format.printf(info => `${info.message}`),
+        format: format.printf((info) => `${info.message}`),
         logLevel: {
                 file: 'debug',
         },
@@ -58,7 +58,7 @@ module.exports = {
 };
 
 module.exports.http.stream = {
-        write(message, encoding) {
+        write(message) {
                 const httpLog = winston.loggers.get('http');
                 httpLog.debug(message.substring(0, message.lastIndexOf('\n')));
         },

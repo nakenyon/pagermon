@@ -12,7 +12,7 @@ function run(trigger, scope, data, config, callback) {
                 password: config.password,
         });
 
-        client.on('error', error => {
+        client.on('error', (error) => {
                 logger.main.error(`MQTT: failed to connect to MQTT server: ${error}`);
                 callback();
         });

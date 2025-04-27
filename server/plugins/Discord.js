@@ -42,7 +42,7 @@ async function run(trigger, scope, data, config, callback) {
                 await discord.send(notificationEmbed);
                 logger.main.info(`Discord: Message Sent`);
         } catch (error) {
-                `Discord: ${logger.main.error(error)}`;
+                logger.main.error(`Discord: ${logger.main.error(error)}`);
         }
 
         callback();

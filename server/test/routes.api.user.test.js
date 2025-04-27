@@ -24,7 +24,7 @@ nconf.load();
 beforeEach(() =>
         db.schema
                 .hasTable('knex_migrations_lock')
-                .then(exists => {
+                .then((exists) => {
                         if (exists) return db.del().from(`knex_migrations_lock`);
                 })
                 .then(() => db.migrate.rollback())
@@ -40,7 +40,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /api/user', () => {
-        it('should return all users if logged in as admin', done => {
+        it('should return all users if logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -65,7 +65,7 @@ describe('GET /api/user', () => {
                                 done();
                         });
         });
-        it('should return all users if an api key is provided', done => {
+        it('should return all users if an api key is provided', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -91,7 +91,7 @@ describe('GET /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -106,7 +106,7 @@ describe('GET /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/user')
                         .end((err, res) => {
@@ -116,7 +116,7 @@ describe('GET /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/user')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -130,7 +130,7 @@ describe('GET /api/user', () => {
 });
 
 describe('POST /api/user', () => {
-        it('should create a new user', done => {
+        it('should create a new user', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -155,7 +155,7 @@ describe('POST /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 400 if required fields are missing', done => {
+        it('should return a 400 if required fields are missing', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -175,7 +175,7 @@ describe('POST /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 400 if username is in use', done => {
+        it('should return a 400 if username is in use', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -200,7 +200,7 @@ describe('POST /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 400 if email is in use', done => {
+        it('should return a 400 if email is in use', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -225,7 +225,7 @@ describe('POST /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -240,7 +240,7 @@ describe('POST /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .post('/api/user')
                         .end((err, res) => {
@@ -250,7 +250,7 @@ describe('POST /api/user', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .post('/api/user')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -264,7 +264,7 @@ describe('POST /api/user', () => {
 });
 
 describe('GET /api/user/:id', () => {
-        it('should return specific user when logged in as admin', done => {
+        it('should return specific user when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -293,7 +293,7 @@ describe('GET /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return blank user when id is new when logged in as admin', done => {
+        it('should return blank user when id is new when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -320,7 +320,7 @@ describe('GET /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return specific user when api key provided', done => {
+        it('should return specific user when api key provided', (done) => {
                 chai.request(server)
                         .get('/api/user/2')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -345,7 +345,7 @@ describe('GET /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return blank user when id is new when api key provided', done => {
+        it('should return blank user when id is new when api key provided', (done) => {
                 chai.request(server)
                         .get('/api/user/new')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -368,7 +368,7 @@ describe('GET /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -383,7 +383,7 @@ describe('GET /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/user/2')
                         .end((err, res) => {
@@ -393,7 +393,7 @@ describe('GET /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/user/2')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -407,7 +407,7 @@ describe('GET /api/user/:id', () => {
 });
 
 describe('POST /api/user/:id', () => {
-        it('should create a new user when admin', done => {
+        it('should create a new user when admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -432,7 +432,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should create a new user when apikey provided', done => {
+        it('should create a new user when apikey provided', (done) => {
                 chai.request(server)
                         .post('/api/user/new')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -453,7 +453,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should 400 when creating a user without a password', done => {
+        it('should 400 when creating a user without a password', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -476,7 +476,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should 400 when creating a user without required properties', done => {
+        it('should 400 when creating a user without required properties', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -499,7 +499,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should update a user when admin', done => {
+        it('should update a user when admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -520,7 +520,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should update a user when apikey provided', done => {
+        it('should update a user when apikey provided', (done) => {
                 chai.request(server)
                         .post('/api/user/2')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -537,7 +537,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should update a user including password when admin', done => {
+        it('should update a user including password when admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -559,7 +559,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should update a user including password when apikey provided', done => {
+        it('should update a user including password when apikey provided', (done) => {
                 chai.request(server)
                         .post('/api/user/2')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -577,7 +577,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should delete multiple users if admin', done => {
+        it('should delete multiple users if admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -596,7 +596,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should delete multiple users if apikey provided', done => {
+        it('should delete multiple users if apikey provided', (done) => {
                 chai.request(server)
                         .post('/api/user/deleteMultiple')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -611,7 +611,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should 400 if provided with invalid deleteList', done => {
+        it('should 400 if provided with invalid deleteList', (done) => {
                 chai.request(server)
                         .post('/api/user/deleteMultiple')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -626,7 +626,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -641,7 +641,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .post('/api/user/new')
                         .end((err, res) => {
@@ -651,7 +651,7 @@ describe('POST /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .post('/api/user/new')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -665,7 +665,7 @@ describe('POST /api/user/:id', () => {
 });
 
 describe('DELETE /api/user/:id', () => {
-        it('should delete a user when logged in as admin', done => {
+        it('should delete a user when logged in as admin', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -679,7 +679,7 @@ describe('DELETE /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should delete a user when api key is provided', done => {
+        it('should delete a user when api key is provided', (done) => {
                 chai.request(server)
                         .delete('/api/user/2')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -689,7 +689,7 @@ describe('DELETE /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should not allow deleting of user ID 1', done => {
+        it('should not allow deleting of user ID 1', (done) => {
                 chai.request(server)
                         .delete('/api/user/1')
                         .set('apikey', 'reallylongkeythatneedstobechanged')
@@ -699,7 +699,7 @@ describe('DELETE /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -714,7 +714,7 @@ describe('DELETE /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .delete('/api/user/2')
                         .end((err, res) => {
@@ -724,7 +724,7 @@ describe('DELETE /api/user/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .delete('/api/user/2')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -738,7 +738,7 @@ describe('DELETE /api/user/:id', () => {
 });
 
 describe('GET /api/userCheck/username/:id', () => {
-        it('should return an username if the submitted username exists', done => {
+        it('should return an username if the submitted username exists', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -754,7 +754,7 @@ describe('GET /api/userCheck/username/:id', () => {
                                 done();
                         });
         });
-        it('should return an empty username if the submitted username does not exist', done => {
+        it('should return an empty username if the submitted username does not exist', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -770,7 +770,7 @@ describe('GET /api/userCheck/username/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -785,7 +785,7 @@ describe('GET /api/userCheck/username/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/userCheck/username/idontexist')
                         .end((err, res) => {
@@ -795,7 +795,7 @@ describe('GET /api/userCheck/username/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/userCheck/username/idontexist')
                         .set('apikey', 'shortkeythatdoesntexist')
@@ -809,7 +809,7 @@ describe('GET /api/userCheck/username/:id', () => {
 });
 
 describe('GET /api/userCheck/email/:id', () => {
-        it('should return an email if the submitted email exists', done => {
+        it('should return an email if the submitted email exists', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -825,7 +825,7 @@ describe('GET /api/userCheck/email/:id', () => {
                                 done();
                         });
         });
-        it('should return an empty email if the submitted email does not exist', done => {
+        it('should return an empty email if the submitted email does not exist', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -841,7 +841,7 @@ describe('GET /api/userCheck/email/:id', () => {
                                 done();
                         });
         });
-        it('should return a 403 when not admin', done => {
+        it('should return a 403 when not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -856,7 +856,7 @@ describe('GET /api/userCheck/email/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when not logged in', done => {
+        it('should return a 401 when not logged in', (done) => {
                 chai.request(server)
                         .get('/api/userCheck/email/idontexist@none.com')
                         .end((err, res) => {
@@ -866,7 +866,7 @@ describe('GET /api/userCheck/email/:id', () => {
                                 done();
                         });
         });
-        it('should return a 401 when incorrect api key provided', done => {
+        it('should return a 401 when incorrect api key provided', (done) => {
                 chai.request(server)
                         .get('/api/userCheck/email/idontexist@none.com')
                         .set('apikey', 'shortkeythatdoesntexist')

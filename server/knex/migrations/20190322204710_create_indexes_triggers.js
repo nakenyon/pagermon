@@ -1,6 +1,6 @@
 const nconf = require('nconf');
 
-exports.up = async function(db) {
+exports.up = async function (db) {
         const dbtype = nconf.get('database:type');
         switch (dbtype) {
                 case 'sqlite3':
@@ -21,7 +21,7 @@ exports.up = async function(db) {
         }
 };
 
-exports.down = async function(db) {
+exports.down = async function (db) {
         const dbtype = nconf.get('database:type');
         if (dbtype === 'sqlite3') return db.schema.dropTableIfExists('messages_search_index');
         return 'Not required';

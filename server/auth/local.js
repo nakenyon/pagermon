@@ -22,9 +22,7 @@ passport.use(
                 if (!username || !password) done(new Error('Username and password required'));
 
                 try {
-                        const user = await db('users')
-                                .where('username', '=', username)
-                                .first();
+                        const user = await db('users').where('username', '=', username).first();
 
                         if (!user) return done(null, false);
                         if (!authHelper.comparePass(password, user.password)) return done(null, false);
@@ -40,10 +38,10 @@ passport.use(
 
 passport.use(
         'login-api',
-        new LocalAPIKeyStrategy(function(apikey, done) {
+        new LocalAPIKeyStrategy(function (apikey, done) {
                 nconf.load();
                 const auth = nconf.get('auth');
-                const key = auth.keys.find(x => x.key === apikey);
+                const key = auth.keys.find((x) => x.key === apikey);
                 // var key = auth.keys.find({ key: apikey });
                 if (!key) return done(null, false);
                 return done(null, key.name);

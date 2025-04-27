@@ -13,7 +13,7 @@ const pluginHandler = require('../../plugins/pluginHandler');
 const pluginHandlerHandle = pluginHandler.handle;
 
 pluginHandlerHandle[promisify.custom] = (trigger, scope, data) =>
-        new Promise(resolve => {
+        new Promise((resolve) => {
                 pluginHandlerHandle(trigger, scope, data, resolve);
         });
 
@@ -38,7 +38,7 @@ function isMemoryDuplicate(data) {
                 if (dupeTime === 0) return true;
 
                 // Else, check if it is 'young' enough to be a dupe
-                const timeFind = _.find(matches, possibleDupe => possibleDupe.timestamp > oldestAllowedTime);
+                const timeFind = _.find(matches, (possibleDupe) => possibleDupe.timestamp > oldestAllowedTime);
                 if (timeFind) {
                         return true;
                 }
@@ -67,13 +67,13 @@ async function isDatabaseDuplicate(data) {
         const matches = await db
                 .from('messages')
                 .select('id')
-                .modify(function(queryBuilder) {
+                .modify(function (queryBuilder) {
                         if (dupeLimit !== 0 && dupeTime !== 0) {
                                 queryBuilder
-                                        .where('id', 'in', function() {
+                                        .where('id', 'in', function () {
                                                 this.select('*')
                                                         // this wierd subquery is to keep mysql happy
-                                                        .from(function() {
+                                                        .from(function () {
                                                                 this.select('id')
                                                                         .from('messages')
                                                                         .where('timestamp', '>', timeDiff)
@@ -86,10 +86,10 @@ async function isDatabaseDuplicate(data) {
                                         .where('address', '=', data.address);
                         } else if (dupeLimit !== 0 && dupeTime === 0) {
                                 queryBuilder
-                                        .where('id', 'in', function() {
+                                        .where('id', 'in', function () {
                                                 this.select('id')
                                                         // this wierd subquery is to keep mysql happy
-                                                        .from(function() {
+                                                        .from(function () {
                                                                 this.select('id')
                                                                         .from('messages')
                                                                         .orderBy('id', 'desc')
@@ -101,10 +101,8 @@ async function isDatabaseDuplicate(data) {
                                         .where('address', '=', data.address);
                         } else if (dupeLimit === 0 && dupeTime !== 0) {
                                 queryBuilder
-                                        .where('id', 'in', function() {
-                                                this.select('id')
-                                                        .from('messages')
-                                                        .where('timestamp', '>', timeDiff);
+                                        .where('id', 'in', function () {
+                                                this.select('id').from('messages').where('timestamp', '>', timeDiff);
                                         })
                                         .where('message', '=', data.message)
                                         .where('address', '=', data.address);
@@ -119,9 +117,9 @@ async function isDatabaseDuplicate(data) {
 function getMessageQuery(req) {
         const pdwMode = nconf.get('messages:pdwMode');
         const adminShow = nconf.get('messages:adminShow');
-        const queryTemplate = db.from('messages').modify(queryBuilder => {
+        const queryTemplate = db.from('messages').modify((queryBuilder) => {
                 if (!req.isAuthenticated())
-                        queryBuilder.where(qb =>
+                        queryBuilder.where((qb) =>
                                 qb.where('capcodes.onlyShowLoggedIn', false).orWhereNull('capcodes.onlyShowLoggedIn')
                         );
 
@@ -130,7 +128,7 @@ function getMessageQuery(req) {
                                 .innerJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
                                 .where('capcodes.ignore', 0);
                 } else {
-                        queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where(qb => {
+                        queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where((qb) => {
                                 qb.where('capcodes.ignore', 0).orWhereNull('capcodes.ignore');
                         });
                 }
@@ -141,7 +139,7 @@ function getMessageQuery(req) {
 const router = express.Router();
 
 router.route('/messages')
-        .get(authHelper.isLoggedInMessages, async function(req, res, next) {
+        .get(authHelper.isLoggedInMessages, async function (req, res, next) {
                 try {
                         const HideCapcode = nconf.get('messages:HideCapcode');
 
@@ -217,7 +215,7 @@ router.route('/messages')
                         next(e);
                 }
         })
-        .post(authHelper.isAdmin, async function(req, res, next) {
+        .post(authHelper.isAdmin, async function (req, res, next) {
                 try {
                         if (!req.body.address) throw new RequiredFieldMissingError('address');
                         if (!req.body.message) throw new RequiredFieldMissingError('message');
@@ -234,8 +232,9 @@ router.route('/messages')
 
                         if (!data.timestamp && data.datetime)
                                 logger.main.warn(
-                                        `Deprecation notice: An incoming message from ${data.source ||
-                                                'an unknown source'}
+                                        `Deprecation notice: An incoming message from ${
+                                                data.source || 'an unknown source'
+                                        }
                                 contains the timestamp as field 'datetime'. The field datetime will be removed from future versions.
                                 Update the message source to use the variable 'timestamp' instead.`
                                 );
@@ -293,11 +292,11 @@ router.route('/messages')
                         if (dbtype === 'oracledb') {
                                 // oracle requires update of search index after insert, can't be trigger for some reason
                                 db.raw(`BEGIN CTX_DDL.SYNC_INDEX('search_idx'); END;`)
-                                        .then(resp => {
+                                        .then((resp) => {
                                                 logger.main.debug('search_idx sync complete');
                                                 logger.main.debug(resp);
                                         })
-                                        .catch(err => {
+                                        .catch((err) => {
                                                 logger.main.error('search_idx sync failed');
                                                 logger.main.error(err);
                                         });
@@ -316,7 +315,7 @@ router.route('/messages')
                                         'capcodes.pluginconf',
                                         'capcodes.onlyShowLoggedIn'
                                 )
-                                .modify(function(queryBuilder) {
+                                .modify(function (queryBuilder) {
                                         queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id');
                                 })
                                 .where('messages.id', '=', messageId);
@@ -381,7 +380,7 @@ router.route('/messages')
                 }
         });
 
-router.route('/messages/:messageId').get(authHelper.isLoggedInMessages, async function(req, res, next) {
+router.route('/messages/:messageId').get(authHelper.isLoggedInMessages, async function (req, res, next) {
         try {
                 const messageId = parseInt(req.params.messageId, 10);
                 const HideCapcode = nconf.get('messages:HideCapcode');
@@ -409,10 +408,7 @@ router.route('/messages/:messageId').get(authHelper.isLoggedInMessages, async fu
                                 )
                         );
 
-                const message = await getMessageQuery(req)
-                        .select(fields)
-                        .where('messages.id', messageId)
-                        .first();
+                const message = await getMessageQuery(req).select(fields).where('messages.id', messageId).first();
 
                 res.status(200).json(message || {});
         } catch (e) {
@@ -420,7 +416,7 @@ router.route('/messages/:messageId').get(authHelper.isLoggedInMessages, async fu
         }
 });
 
-router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function(req, res, next) {
+router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function (req, res, next) {
         try {
                 const HideCapcode = nconf.get('messages:HideCapcode');
                 const dbtype = nconf.get('database:type');
@@ -475,7 +471,7 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
 
                 const messages = await getMessageQuery(req)
                         .select(fields)
-                        .modify(function(qb) {
+                        .modify(function (qb) {
                                 if (query)
                                         switch (dbtype) {
                                                 case 'sqlite3':
@@ -505,13 +501,13 @@ router.route('/messageSearch').get(authHelper.isLoggedInMessages, async function
                                         }
 
                                 if (address)
-                                        qb.where(addressWhere => {
+                                        qb.where((addressWhere) => {
                                                 addressWhere
                                                         .where('messages.address', 'LIKE', address)
                                                         .orWhere('messages.source', address);
                                         });
                                 if (agency)
-                                        qb.where(agencyWhere => {
+                                        qb.where((agencyWhere) => {
                                                 agencyWhere
                                                         .where('capcodes.agency', 'LIKE', `%${agency}%`)
                                                         .where('capcodes.ignore', false);
@@ -556,4 +552,4 @@ function parseJSON(json) {
         }
 }
 
-module.exports = router;
+module.exports = { router };

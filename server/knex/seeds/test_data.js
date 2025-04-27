@@ -1,4 +1,4 @@
-exports.seed = async function(db) {
+exports.seed = async function (db) {
         const capcodes = [
                 {
                         address: '1234567',
@@ -100,8 +100,7 @@ exports.seed = async function(db) {
                 },
                 {
                         address: '1234571',
-                        message:
-                                'This is a Test Message to Address 1234571, that should be hidden to unauthorized users',
+                        message: 'This is a Test Message to Address 1234571, that should be hidden to unauthorized users',
                         source: 'Client 4',
                         timestamp: '1529494321',
                         alias_id: 6,

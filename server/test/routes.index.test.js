@@ -24,7 +24,7 @@ nconf.load();
 beforeEach(() =>
         db.schema
                 .hasTable('knex_migrations_lock')
-                .then(exists => {
+                .then((exists) => {
                         if (exists) return db.del().from(`knex_migrations_lock`);
                 })
                 .then(() => db.migrate.rollback())
@@ -40,7 +40,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /', () => {
-        it('should return the home page', done => {
+        it('should return the home page', (done) => {
                 nconf.set('messages:apiSecurity', false);
                 nconf.save();
                 chai.request(server)
@@ -68,7 +68,7 @@ describe('GET /', () => {
                                 done();
                         });
         }); */
-        it('should return the index if a user is logged in and apiSecurity enabled', done => {
+        it('should return the index if a user is logged in and apiSecurity enabled', (done) => {
                 nconf.set('messages:apiSecurity', true);
                 nconf.save();
                 passportStub.login({

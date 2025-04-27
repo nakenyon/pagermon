@@ -2,7 +2,6 @@ process.env.NODE_ENV = 'test';
 
 const chai = require('chai');
 
-const should = chai.should();
 const chaiHttp = require('chai-http');
 
 chai.use(chaiHttp);
@@ -25,7 +24,7 @@ nconf.load();
 beforeEach(() =>
         db.schema
                 .hasTable('knex_migrations_lock')
-                .then(exists => {
+                .then((exists) => {
                         if (exists) return db.del().from(`knex_migrations_lock`);
                 })
                 .then(() => db.migrate.rollback())
@@ -45,7 +44,7 @@ afterEach(() =>
 );
 
 describe('Database failures', () => {
-        it('should return 500 if all tables are deleted', done => {
+        it('should return 500 if all tables are deleted', (done) => {
                 db.migrate.rollback().then(() => {
                         chai.request(server)
                                 .get('/api/messages/')
@@ -59,7 +58,8 @@ describe('Database failures', () => {
                                 });
                 });
         });
-        it('should return 500 if the database is not available', done => {
+        it('should return 500 if the database is not available', (done) => {
+                /* eslint-disable no-console */
                 // Simulate a database connection error and silence the error message
                 const originalConsoleError = console.error;
                 const originalKnexLogger = db.client.logger;
@@ -84,5 +84,6 @@ describe('Database failures', () => {
                                 res.body.error.message.should.contain('Internal Server Error');
                                 done();
                         });
+                /* eslint-enable no-console */
         });
 });

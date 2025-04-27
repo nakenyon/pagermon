@@ -1,13 +1,13 @@
 const express = require('express');
 const logger = require('../../log');
 
-const messagesRouter = require('./messages');
-const capcodesRouter = require('./capcodes');
-const usersRouter = require('./users');
+const messagesRouter = require('./messages').router;
+const capcodesRouter = require('./capcodes').router;
+const usersRouter = require('./users').router;
 
 const router = express.Router();
 
-router.use(function(req, res, next) {
+router.use(function (req, res, next) {
         res.locals.login = req.isAuthenticated();
         res.locals.user = req.user || false;
         next();

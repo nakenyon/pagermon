@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 const version = '0.4.0-beta';
 
 const { CronJob } = require('cron');
@@ -14,11 +15,12 @@ const nconf = require('nconf');
 const path = require('path');
 const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
+const performCapcodeRefresh = require('./routes/api/capcode').performCapcodeRefresh;
 
 const logger = require('./log');
 const passport = require('./auth/local');
 
-process.on('SIGINT', function() {
+process.on('SIGINT', function () {
         console.log('\nGracefully shutting down from SIGINT (Ctrl-C)');
         process.exit(1);
 });
@@ -42,7 +44,6 @@ const theme = nconf.get('global:theme');
 // Enable Azure Monitoring if enabled
 const azureEnable = nconf.get('monitoring:azureEnable');
 if (azureEnable) {
-        // eslint-disable-next-line global-require
         const appInsights = require('applicationinsights');
 
         logger.main.debug('Starting Azure Application Insights');
@@ -79,8 +80,6 @@ if ((dbtype === 'pg' || dbtype === 'mysql' || dbtype === 'mssql') && !nconf.get(
         nconf.save();
 }
 
-const db = require('./knex/knex.js');
-
 const port = normalizePort(process.env.PORT || '3000');
 const app = express();
 
@@ -94,7 +93,7 @@ const server = http.createServer(app);
 const socketIo = require('socket.io')(server);
 
 server.listen(port);
-server.on('error', error => {
+server.on('error', (error) => {
         {
                 if (error.syscall !== 'listen') {
                         throw error;
@@ -123,7 +122,7 @@ server.on('listening', () => {
         logger.main.info(`Listening on ${bind}`);
 });
 // Set connection timeout to prevent long running queries failing on large databases - mostly capacode refresh on MySQL
-server.on('connection', function(connection) {
+server.on('connection', function (connection) {
         connection.setTimeout(600 * 1000);
 });
 // Lets set setMaxListeners to a decent number - not to high to allow the memory leak warking to still trigger
@@ -138,7 +137,7 @@ socketIo.sockets.setMaxListeners(20);
             socket.removeAllListeners();
     }); */
 
-socketIo.sockets.on('connection', function(socket) {
+socketIo.sockets.on('connection', function (socket) {
         socket.removeAllListeners();
         const userGroup = socket.request?.user?.role || 'anonymous';
         socket.join(userGroup);
@@ -147,7 +146,7 @@ socketIo.sockets.on('connection', function(socket) {
 app.use(favicon(path.join(__dirname, 'themes', theme, 'public', 'favicon.ico')));
 
 // set socket.io to be shared across all modules
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
         req.io = socketIo;
         next();
 });
@@ -188,13 +187,13 @@ app.use(passport.session()); // persistent login sessions
 app.use(flash());
 app.use(express.static(path.join(__dirname, 'themes', theme, 'public')));
 app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
         res.locals.version = version;
         res.locals.loglevel = nconf.get('global:loglevel') || 'info';
         next();
 });
 
-const wrapMiddleware = middleware => (socket, next) => middleware(socket.request, {}, next);
+const wrapMiddleware = (middleware) => (socket, next) => middleware(socket.request, {}, next);
 socketIo.use(wrapMiddleware(session(sessionSettings)));
 socketIo.use(wrapMiddleware(passport.session()));
 socketIo.of('/adminio').use(wrapMiddleware(session(sessionSettings)));
@@ -213,14 +212,14 @@ app.use('/api', apiRouter);
 app.use('/auth', authRouter);
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
-        var err = new Error('Not Found');
+app.use(function (req, res, next) {
+        const err = new Error('Not Found');
         err.status = 404;
         next(err);
 });
 
 // GUI error handler
-app.use(function(err, req, res, next) {
+app.use(function (err, req, res, next) {
         const title = nconf.get('global:monitorName');
         // set locals, only providing error in development
         res.locals.message = err.message;
@@ -254,22 +253,13 @@ if (dbtype === 'mysql') {
                                 if (!nconf.get('database:aliasRefreshRequired'))
                                         return logger.main.debug('CRON: Alias Refresh not Required, Skipping.');
 
-                                console.time('updateMap');
                                 logger.main.info('CRON: Alias Refresh required, running.');
-                                // TODO: Switch to function used in route
-                                await db('messages').update('alias_id', function() {
-                                        this.select('id')
-                                                .from('capcodes')
-                                                .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
-                                                .orderByRaw("REPLACE(address, '_', '%') DESC LIMIT 1");
-                                });
+                                await performCapcodeRefresh();
 
-                                console.timeEnd('updateMap');
                                 nconf.set('database:aliasRefreshRequired', 0);
                                 nconf.save();
                                 logger.main.info('CRON: Alias Refresh Successful');
                         } catch (error) {
-                                console.timeEnd('updateMap');
                                 logger.main.error(`CRON: Error refreshing aliases: ${error.message}`);
                         }
                 },
@@ -297,11 +287,10 @@ function normalizePort(val) {
 
 function checkForDbDriver(driver) {
         switch (driver) {
-                /* eslint-disable import/no-unresolved, import/no-extraneous-dependencies, global-require */
                 case 'sqlite3': {
                         try {
                                 require('sqlite3');
-                        } catch (e) {
+                        } catch {
                                 logger.main.error(
                                         `Selected database type is sqlite3, but npm package sqlite3 was not installed.`
                                 );
@@ -315,7 +304,7 @@ function checkForDbDriver(driver) {
                 case 'mysql': {
                         try {
                                 require('knex');
-                        } catch (e) {
+                        } catch {
                                 logger.main.error(
                                         `Selected database type is mysql, but npm package knex was not installed.`
                                 );
@@ -329,7 +318,7 @@ function checkForDbDriver(driver) {
                 case 'oracledb': {
                         try {
                                 require('oracledb');
-                        } catch (e) {
+                        } catch {
                                 logger.main.error(
                                         `Selected database type is oracledb, but npm package oracledb was not installed.`
                                 );
@@ -345,5 +334,4 @@ function checkForDbDriver(driver) {
                         process.exit(1);
                 }
         }
-        /* eslint-enable import/no-extraneous-dependencies, global-require */
 }

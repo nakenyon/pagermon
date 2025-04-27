@@ -25,7 +25,7 @@ function run(trigger, scope, data, config, callback) {
 
         if (pConf.priority === 2 || pConf.priority === '2') logger.main.info('SENDING EMERGENCY MESSAGE: PROWL');
 
-        prowl.push(event, config.application, payload, function(err, remaining) {
+        prowl.push(event, config.application, payload, function (err, remaining) {
                 if (err) logger.main.error(`Prowl: ${err}`);
                 else logger.main.debug(`Prowl: Message sent. ${remaining} messages remaining for this hour.`);
                 callback();

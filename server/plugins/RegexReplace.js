@@ -2,7 +2,7 @@
 Regex Replace
 Allows matching and replacing
 */
-var logger = require('../log');
+const logger = require('../log');
 
 function run(trigger, scope, data, config, callback) {
         if (!config.regexReplaceMatchRegex) return callback();

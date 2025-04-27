@@ -30,7 +30,7 @@ function run(trigger, scope, data, config, callback) {
                 logger.main.info('SENDING EMERGENCY PUSH NOTIFICATION');
         }
 
-        p.send(msg, function(err, result) {
+        p.send(msg, function (err, result) {
                 if (err) {
                         logger.main.error(`Pushover: ${err}`);
                 }

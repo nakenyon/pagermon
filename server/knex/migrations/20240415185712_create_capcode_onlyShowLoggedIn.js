@@ -10,16 +10,13 @@ const nconf = require('nconf');
  * Therefore, we have to temporarily delete the triggers and re-install them after doing the migration.
  */
 
-module.exports.up = async function(knex) {
+module.exports.up = async function (knex) {
         const dbtype = nconf.get('database:type');
         let triggers;
         if (dbtype === 'sqlite3') {
-                triggers = await knex
-                        .from('sqlite_master')
-                        .select(['name', 'sql'])
-                        .where('type', 'trigger');
+                triggers = await knex.from('sqlite_master').select(['name', 'sql']).where('type', 'trigger');
 
-                const promises = triggers.map(trigger => knex.raw(`DROP TRIGGER ${trigger.name}`));
+                const promises = triggers.map((trigger) => knex.raw(`DROP TRIGGER ${trigger.name}`));
 
                 await Promise.all(promises);
         }
@@ -28,14 +25,14 @@ module.exports.up = async function(knex) {
                         reject('Capcode table is missing!');
                 });
 
-        await knex.schema.alterTable('capcodes', table => {
+        await knex.schema.alterTable('capcodes', (table) => {
                 table.boolean('onlyShowLoggedIn').defaultTo(false);
         });
 
         await knex('capcodes').update({ onlyShowLoggedIn: false });
 
         if (dbtype === 'sqlite3') {
-                const promises = triggers.map(trigger => knex.raw(trigger.sql));
+                const promises = triggers.map((trigger) => knex.raw(trigger.sql));
                 await Promise.all(promises);
         }
 };
@@ -44,25 +41,22 @@ module.exports.up = async function(knex) {
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-module.exports.down = async function(knex) {
+module.exports.down = async function (knex) {
         const dbtype = nconf.get('database:type');
         let triggers;
         if (dbtype === 'sqlite3') {
-                triggers = await knex
-                        .from('sqlite_master')
-                        .select(['name', 'sql'])
-                        .where('type', 'trigger');
+                triggers = await knex.from('sqlite_master').select(['name', 'sql']).where('type', 'trigger');
 
-                const promises = triggers.map(trigger => knex.raw(`DROP TRIGGER ${trigger.name}`));
+                const promises = triggers.map((trigger) => knex.raw(`DROP TRIGGER ${trigger.name}`));
                 await Promise.all(promises);
         }
 
-        await knex.schema.alterTable('capcodes', table => {
+        await knex.schema.alterTable('capcodes', (table) => {
                 table.dropColumn('onlyShowLoggedIn');
         });
 
         if (dbtype === 'sqlite3') {
-                const promises = triggers.map(trigger => knex.raw(trigger.sql));
+                const promises = triggers.map((trigger) => knex.raw(trigger.sql));
                 await Promise.all(promises);
         }
 };

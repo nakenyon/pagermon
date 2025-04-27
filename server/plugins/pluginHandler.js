@@ -1,5 +1,3 @@
-/* eslint-disable import/no-dynamic-require */
-/* eslint-disable global-require */
 const fs = require('fs');
 const nconf = require('nconf');
 const util = require('util');
@@ -33,7 +31,7 @@ async function handle(trigger, scope, initialMessage, callback) {
 
                 logger.main.debug('RUNNING PLUGIN!');
                 const plugin = require(`./${pluginName}`);
-                plugin.run(trigger, scope, message, pluginConfig, function(response, error) {
+                plugin.run(trigger, scope, message, pluginConfig, function (response, error) {
                         if (error) logger.main.error(error);
                         if (response) message = response;
                         /* TODO: Doesn't seem logic to me, but that is, what the plugin did before.

@@ -24,7 +24,7 @@ nconf.load();
 beforeEach(() =>
         db.schema
                 .hasTable('knex_migrations_lock')
-                .then(exists => {
+                .then((exists) => {
                         if (exists) return db.del().from(`knex_migrations_lock`);
                 })
                 .then(() => db.migrate.rollback())
@@ -40,7 +40,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /admin/settingsData', () => {
-        it('should return the settings data', done => {
+        it('should return the settings data', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -58,7 +58,7 @@ describe('GET /admin/settingsData', () => {
                                 done();
                         });
         });
-        it('should 403 if not admin', done => {
+        it('should 403 if not admin', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -72,7 +72,7 @@ describe('GET /admin/settingsData', () => {
                                 done();
                         });
         });
-        it('should 401 if not logged in', done => {
+        it('should 401 if not logged in', (done) => {
                 chai.request(server)
                         .get('/admin/settingsData')
                         .redirects(0)
@@ -85,7 +85,7 @@ describe('GET /admin/settingsData', () => {
 });
 
 describe('POST /admin/settingsData', () => {
-        it('should save the settings data', done => {
+        it('should save the settings data', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -166,7 +166,7 @@ describe('POST /admin/settingsData', () => {
                                 done();
                         });
         });
-        it('should not save the settings for non-admins', done => {
+        it('should not save the settings for non-admins', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -248,7 +248,7 @@ describe('POST /admin/settingsData', () => {
 });
 
 describe('GET /admin/*', () => {
-        it('should return the admin page when admin is logged in', done => {
+        it('should return the admin page when admin is logged in', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -263,7 +263,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of admin page when user is logged in', done => {
+        it('should return the index page instead of admin page when user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -278,7 +278,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of admin page when not logged in', done => {
+        it('should return the index page instead of admin page when not logged in', (done) => {
                 chai.request(server)
                         .get('/admin/admin')
                         .redirects(0)
@@ -289,7 +289,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the aliases page when admin is logged in', done => {
+        it('should return the aliases page when admin is logged in', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -304,7 +304,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of aliases page when user is logged in', done => {
+        it('should return the index page instead of aliases page when user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -319,7 +319,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of aliases page when not logged in', done => {
+        it('should return the index page instead of aliases page when not logged in', (done) => {
                 chai.request(server)
                         .get('/admin/aliases')
                         .redirects(0)
@@ -330,7 +330,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the users page when admin is logged in', done => {
+        it('should return the users page when admin is logged in', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -345,7 +345,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of users page when user is logged in', done => {
+        it('should return the index page instead of users page when user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -360,7 +360,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of users page when not logged in', done => {
+        it('should return the index page instead of users page when not logged in', (done) => {
                 chai.request(server)
                         .get('/admin/users')
                         .redirects(0)
@@ -371,7 +371,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the userDetails page when admin is logged in', done => {
+        it('should return the userDetails page when admin is logged in', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -386,7 +386,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of userDetails page when user is logged in', done => {
+        it('should return the index page instead of userDetails page when user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -401,7 +401,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of userDetails page when not logged in', done => {
+        it('should return the index page instead of userDetails page when not logged in', (done) => {
                 chai.request(server)
                         .get('/admin/users/1')
                         .redirects(0)
@@ -412,7 +412,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the settings page when admin is logged in', done => {
+        it('should return the settings page when admin is logged in', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -427,7 +427,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of settings page when user is logged in', done => {
+        it('should return the index page instead of settings page when user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -442,7 +442,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of settings page when not logged in', done => {
+        it('should return the index page instead of settings page when not logged in', (done) => {
                 chai.request(server)
                         .get('/admin/settings')
                         .redirects(0)
@@ -453,7 +453,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the aliasDetails page when admin is logged in', done => {
+        it('should return the aliasDetails page when admin is logged in', (done) => {
                 passportStub.login({
                         username: 'adminactive',
                         password: 'changeme',
@@ -468,7 +468,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of aliasDetails page when user is logged in', done => {
+        it('should return the index page instead of aliasDetails page when user is logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',
@@ -483,7 +483,7 @@ describe('GET /admin/*', () => {
                                 done();
                         });
         });
-        it('should return the index page instead of aliasDetails page when not logged in', done => {
+        it('should return the index page instead of aliasDetails page when not logged in', (done) => {
                 passportStub.login({
                         username: 'useractive',
                         password: 'changeme',

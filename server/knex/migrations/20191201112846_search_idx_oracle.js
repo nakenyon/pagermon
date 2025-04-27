@@ -1,6 +1,6 @@
 const nconf = require('nconf');
 
-exports.up = async function(db) {
+exports.up = async function (db) {
         const dbtype = nconf.get('database:type');
         if (dbtype !== 'oracledb') return 'Not required';
 
@@ -9,7 +9,7 @@ exports.up = async function(db) {
                 ('FILTER CTXSYS.NULL_FILTER')`);
 };
 
-exports.down = function(db) {
+exports.down = function (db) {
         const dbtype = nconf.get('database:type');
         if (dbtype !== 'oracledb') return 'Not Required';
         return db.schema.raw(`DROP INDEX search_idx`);

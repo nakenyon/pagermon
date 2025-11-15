@@ -1,36 +1,15 @@
 #
 #	Build & install packages
-# multistage to save time when building (don't install packages every time)
 #
-FROM slocomptech/bi-node:12 as builder
+FROM node:22-alpine
 
-COPY package.json /app/
+WORKDIR /usr/src/app
 
-RUN apk add --no-cache --virtual .build-dependencies \
-      autoconf \
-      automake \
-      build-base \
-      cmake \
-      gcc \
-      g++ \
-      make \
-      musl-dev \
-      python3 && \
-    ln -s /usr/bin/python3 /usr/bin/python && \
-    cd /app && \
-    sudo -u ${CONTAINER_USER} -g ${CONTAINER_USER} npm install ${NPM_ARGS}
+COPY package*.json ./
 
-#
-#	PagerMon image
-#
-FROM slocomptech/bi-node:12
+RUN npm install
 
-#
-#	Copy packages from builder
-#
-COPY --from=builder /app/node_modules /app/node_modules
-
-#
+# 
 #	Arguments
 #
 ARG BUILD_DATE
@@ -48,11 +27,11 @@ ARG VERSION
 #
 LABEL org.opencontainers.image.authors="PagerMon Team" \
       org.opencontainers.image.created=${BUILD_DATE} \
-      org.opencontainers.image.description="PagerMon server" \
+      org.opencontainers.image.description="PagerMon Server" \
       org.opencontainers.image.documentation="https://github.com/pagermon/pagermon" \
       org.opencontainers.image.revision=${VCS_REF} \
       org.opencontainers.image.source=${VCS_SRC} \
-      org.opencontainers.image.title="PagerMon server" \
+      org.opencontainers.image.title="PagerMon Server" \
       org.opencontainers.image.url="https://github.com/pagermon/pagermon"\
       org.opencontainers.image.vendor="PagerMon Team" \
       org.opencontainers.image.version=${VERSION}
@@ -68,23 +47,11 @@ ENV APP_NAME=PagerMon \
 #
 #	Install app in container
 #
+COPY . .
+
+# TODO: Change to ENV mounts or create config on the fly
+RUN cp config/docker-default.json config/config.json
+
 EXPOSE 3000
 
-RUN apk add --no-cache sqlite
-
-#
-# s6 overlay scripts
-#	@see https://github.com/just-containers/s6-overlay
-#
-COPY root /
-
-COPY . /app/
-
-# Install pagermon
-RUN chown -R $CONTAINER_USER:$CONTAINER_USER /app && \
-    chown -R $CONTAINER_USER:$CONTAINER_USER /defaults && \
-    # Link config file to config dir
-    sudo -u ${CONTAINER_USER} -g ${CONTAINER_USER} ln -s /config/config.json /app/config/config.json && \
-    sudo -u ${CONTAINER_USER} -g ${CONTAINER_USER} ln -s /config/backup.json /app/config/backup.json && \
-    sudo -u ${CONTAINER_USER} -g ${CONTAINER_USER} cp /app/config/default.json /defaults/config.json && \
-    sed -i 's/"\.\/messages\.db.*"/"\/config\/messages\.db"/' /defaults/config.json
+CMD ["node", "app.js"] 

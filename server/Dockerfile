@@ -26,15 +26,15 @@ ARG VERSION
 #	@see https://semver.org/
 #
 LABEL org.opencontainers.image.authors="PagerMon Team" \
-      org.opencontainers.image.created=${BUILD_DATE} \
-      org.opencontainers.image.description="PagerMon Server" \
-      org.opencontainers.image.documentation="https://github.com/pagermon/pagermon" \
-      org.opencontainers.image.revision=${VCS_REF} \
-      org.opencontainers.image.source=${VCS_SRC} \
-      org.opencontainers.image.title="PagerMon Server" \
-      org.opencontainers.image.url="https://github.com/pagermon/pagermon"\
-      org.opencontainers.image.vendor="PagerMon Team" \
-      org.opencontainers.image.version=${VERSION}
+    org.opencontainers.image.created=${BUILD_DATE} \
+    org.opencontainers.image.description="PagerMon Server" \
+    org.opencontainers.image.documentation="https://github.com/pagermon/pagermon" \
+    org.opencontainers.image.revision=${VCS_REF} \
+    org.opencontainers.image.source=${VCS_SRC} \
+    org.opencontainers.image.title="PagerMon Server" \
+    org.opencontainers.image.url="https://github.com/pagermon/pagermon"\
+    org.opencontainers.image.vendor="PagerMon Team" \
+    org.opencontainers.image.version=${VERSION}
 
 #
 #	Environment variables

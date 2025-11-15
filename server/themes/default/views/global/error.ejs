@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <%- include ('header') -%>
-<base href="/">
-</head>
+    <base href="/">
+    </head>
 
-<body id="error-body">
+    <body id="error-body">
 
-<%- include ('menu') -%>
+        <%- include ('menu') -%>
 
-<div id="content" class="container-fluid">
-    
-<h1><%= message %></h1>
-<h2><%= error.status %></h2>
-<pre><%= error.stack %></pre>
+            <div id="content" class="container-fluid">
 
-</div>
-<%- include ('footer') -%>
+                <h1>
+                    <%= message %>
+                </h1>
+                <h2>
+                    <%= error.status %>
+                </h2>
+                <pre><%= error.stack %></pre>
+
+            </div>
+            <%- include ('footer') -%>

@@ -21,7 +21,17 @@ passportStub.install(server);
 nconf.file({ file: confFile });
 nconf.load();
 
-beforeEach(() => db.migrate.rollback().then(() => db.migrate.latest().then(() => db.seed.run().then(() => {nconf.set('messages:HideSource', false); nconf.set('messages:apiSecurity', false); nconf.set('messages:HideCapcode', false)}))));
+beforeEach(() =>
+    db.migrate.rollback().then(() =>
+        db.migrate.latest().then(() =>
+            db.seed.run().then(() => {
+                nconf.set('messages:HideSource', false);
+                nconf.set('messages:apiSecurity', false);
+                nconf.set('messages:HideCapcode', false);
+            })
+        )
+    )
+);
 
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
@@ -30,7 +40,7 @@ describe('GET /api/user', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/user')
@@ -38,15 +48,15 @@ describe('GET /api/user', () => {
                 should.not.exist(err);
                 res.status.should.eql(200);
                 res.body.should.be.a('array');
-                res.body[0].should.have.property('id')
-                res.body[0].should.have.property('givenname')
-                res.body[0].should.have.property('surname')
-                res.body[0].should.have.property('username')
-                res.body[0].should.have.property('email')
-                res.body[0].should.have.property('role')
-                res.body[0].should.have.property('status')
-                res.body[0].should.have.property('lastlogondate')
-                res.body.length.should.eql(3)
+                res.body[0].should.have.property('id');
+                res.body[0].should.have.property('givenname');
+                res.body[0].should.have.property('surname');
+                res.body[0].should.have.property('username');
+                res.body[0].should.have.property('email');
+                res.body[0].should.have.property('role');
+                res.body[0].should.have.property('status');
+                res.body[0].should.have.property('lastlogondate');
+                res.body.length.should.eql(3);
                 res.type.should.eql('application/json');
                 done();
             });
@@ -55,7 +65,7 @@ describe('GET /api/user', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/user')
@@ -64,15 +74,15 @@ describe('GET /api/user', () => {
                 should.not.exist(err);
                 res.status.should.eql(200);
                 res.body.should.be.a('array');
-                res.body[0].should.have.property('id')
-                res.body[0].should.have.property('givenname')
-                res.body[0].should.have.property('surname')
-                res.body[0].should.have.property('username')
-                res.body[0].should.have.property('email')
-                res.body[0].should.have.property('role')
-                res.body[0].should.have.property('status')
-                res.body[0].should.have.property('lastlogondate')
-                res.body.length.should.eql(3)
+                res.body[0].should.have.property('id');
+                res.body[0].should.have.property('givenname');
+                res.body[0].should.have.property('surname');
+                res.body[0].should.have.property('username');
+                res.body[0].should.have.property('email');
+                res.body[0].should.have.property('role');
+                res.body[0].should.have.property('status');
+                res.body[0].should.have.property('lastlogondate');
+                res.body.length.should.eql(3);
                 res.type.should.eql('application/json');
                 done();
             });
@@ -81,7 +91,7 @@ describe('GET /api/user', () => {
         passportStub.login({
             username: 'useractive',
             password: 'changeme',
-            role: 'user'
+            role: 'user',
         });
         chai.request(server)
             .get('/api/user')
@@ -120,7 +130,7 @@ describe('POST /api/user', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user')
@@ -130,22 +140,22 @@ describe('POST /api/user', () => {
                 givenname: 'Dude',
                 password: 'changeme',
                 status: 'active',
-                role: 'admin'
+                role: 'admin',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
-                res.body.id.should.eql(5)
+                res.body.status.should.eql('ok');
+                res.body.id.should.eql(5);
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should return a 400 if required fields are missing', done => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user')
@@ -156,17 +166,17 @@ describe('POST /api/user', () => {
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(400);
-                res.body.status.should.eql('error')
-                res.body.error.should.eql('Invalid request body')
+                res.body.status.should.eql('error');
+                res.body.error.should.eql('Invalid request body');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should return a 400 if username is in use', done => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user')
@@ -176,22 +186,22 @@ describe('POST /api/user', () => {
                 givenname: 'Dude',
                 password: 'changeme',
                 role: 'user',
-                status:'active'
+                status: 'active',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(400);
-                res.body.status.should.eql('error')
-                res.body.error.should.eql('Username or Email exists')
+                res.body.status.should.eql('error');
+                res.body.error.should.eql('Username or Email exists');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should return a 400 if email is in use', done => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user')
@@ -201,22 +211,22 @@ describe('POST /api/user', () => {
                 givenname: 'Dude',
                 password: 'changeme',
                 status: 'active',
-                role: 'user'
+                role: 'user',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(400);
-                res.body.status.should.eql('error')
-                res.body.error.should.eql('Username or Email exists')
+                res.body.status.should.eql('error');
+                res.body.error.should.eql('Username or Email exists');
                 res.type.should.eql('application/json');
                 done();
             });
-    }); 
+    });
     it('should return a 401 when not admin', done => {
         passportStub.login({
             username: 'useractive',
             password: 'changeme',
-            role: 'user'
+            role: 'user',
         });
         chai.request(server)
             .post('/api/user')
@@ -255,7 +265,7 @@ describe('GET /api/user/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/user/2')
@@ -263,20 +273,20 @@ describe('GET /api/user/:id', () => {
                 res.status.should.eql(200);
                 res.type.should.eql('application/json');
                 res.body.should.be.a('object');
-                res.body.should.have.property('id')
-                res.body.id.should.eql(2)
-                res.body.should.have.property('givenname')
-                res.body.givenname.should.eql('Active')
-                res.body.should.have.property('surname')
-                res.body.surname.should.eql('User')
-                res.body.should.have.property('username')
-                res.body.username.should.eql('useractive')
-                res.body.should.have.property('email')
-                res.body.email.should.eql('none1@none.com')
-                res.body.should.have.property('role')
-                res.body.role.should.eql('user')
-                res.body.should.have.property('status')
-                res.body.status.should.eql('active')
+                res.body.should.have.property('id');
+                res.body.id.should.eql(2);
+                res.body.should.have.property('givenname');
+                res.body.givenname.should.eql('Active');
+                res.body.should.have.property('surname');
+                res.body.surname.should.eql('User');
+                res.body.should.have.property('username');
+                res.body.username.should.eql('useractive');
+                res.body.should.have.property('email');
+                res.body.email.should.eql('none1@none.com');
+                res.body.should.have.property('role');
+                res.body.role.should.eql('user');
+                res.body.should.have.property('status');
+                res.body.status.should.eql('active');
                 done();
             });
     });
@@ -284,7 +294,7 @@ describe('GET /api/user/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/user/new')
@@ -292,18 +302,18 @@ describe('GET /api/user/:id', () => {
                 res.status.should.eql(200);
                 res.type.should.eql('application/json');
                 res.body.should.be.a('object');
-                res.body.should.have.property('givenname')
-                res.body.givenname.should.eql('')
-                res.body.should.have.property('surname')
-                res.body.surname.should.eql('')
-                res.body.should.have.property('username')
-                res.body.username.should.eql('')
-                res.body.should.have.property('email')
-                res.body.email.should.eql('')
-                res.body.should.have.property('role')
-                res.body.role.should.eql('user')
-                res.body.should.have.property('status')
-                res.body.status.should.eql('active')
+                res.body.should.have.property('givenname');
+                res.body.givenname.should.eql('');
+                res.body.should.have.property('surname');
+                res.body.surname.should.eql('');
+                res.body.should.have.property('username');
+                res.body.username.should.eql('');
+                res.body.should.have.property('email');
+                res.body.email.should.eql('');
+                res.body.should.have.property('role');
+                res.body.role.should.eql('user');
+                res.body.should.have.property('status');
+                res.body.status.should.eql('active');
                 done();
             });
     });
@@ -315,20 +325,20 @@ describe('GET /api/user/:id', () => {
                 res.status.should.eql(200);
                 res.type.should.eql('application/json');
                 res.body.should.be.a('object');
-                res.body.should.have.property('id')
-                res.body.id.should.eql(2)
-                res.body.should.have.property('givenname')
-                res.body.givenname.should.eql('Active')
-                res.body.should.have.property('surname')
-                res.body.surname.should.eql('User')
-                res.body.should.have.property('username')
-                res.body.username.should.eql('useractive')
-                res.body.should.have.property('email')
-                res.body.email.should.eql('none1@none.com')
-                res.body.should.have.property('role')
-                res.body.role.should.eql('user')
-                res.body.should.have.property('status')
-                res.body.status.should.eql('active')
+                res.body.should.have.property('id');
+                res.body.id.should.eql(2);
+                res.body.should.have.property('givenname');
+                res.body.givenname.should.eql('Active');
+                res.body.should.have.property('surname');
+                res.body.surname.should.eql('User');
+                res.body.should.have.property('username');
+                res.body.username.should.eql('useractive');
+                res.body.should.have.property('email');
+                res.body.email.should.eql('none1@none.com');
+                res.body.should.have.property('role');
+                res.body.role.should.eql('user');
+                res.body.should.have.property('status');
+                res.body.status.should.eql('active');
                 done();
             });
     });
@@ -340,18 +350,18 @@ describe('GET /api/user/:id', () => {
                 res.status.should.eql(200);
                 res.type.should.eql('application/json');
                 res.body.should.be.a('object');
-                res.body.should.have.property('givenname')
-                res.body.givenname.should.eql('')
-                res.body.should.have.property('surname')
-                res.body.surname.should.eql('')
-                res.body.should.have.property('username')
-                res.body.username.should.eql('')
-                res.body.should.have.property('email')
-                res.body.email.should.eql('')
-                res.body.should.have.property('role')
-                res.body.role.should.eql('user')
-                res.body.should.have.property('status')
-                res.body.status.should.eql('active')
+                res.body.should.have.property('givenname');
+                res.body.givenname.should.eql('');
+                res.body.should.have.property('surname');
+                res.body.surname.should.eql('');
+                res.body.should.have.property('username');
+                res.body.username.should.eql('');
+                res.body.should.have.property('email');
+                res.body.email.should.eql('');
+                res.body.should.have.property('role');
+                res.body.role.should.eql('user');
+                res.body.should.have.property('status');
+                res.body.status.should.eql('active');
                 done();
             });
     });
@@ -359,7 +369,7 @@ describe('GET /api/user/:id', () => {
         passportStub.login({
             username: 'useractive',
             password: 'changeme',
-            role: 'user'
+            role: 'user',
         });
         chai.request(server)
             .get('/api/user/2')
@@ -398,7 +408,7 @@ describe('POST /api/user/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user/new')
@@ -408,17 +418,17 @@ describe('POST /api/user/:id', () => {
                 givenname: 'Dude',
                 password: 'changeme',
                 status: 'active',
-                role: 'admin'
+                role: 'admin',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
-                res.body.id.should.eql(5)
+                res.body.status.should.eql('ok');
+                res.body.id.should.eql(5);
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should create a new user when apikey provided', done => {
         chai.request(server)
             .post('/api/user/new')
@@ -429,22 +439,22 @@ describe('POST /api/user/:id', () => {
                 givenname: 'Dude',
                 password: 'changeme',
                 status: 'active',
-                role: 'admin'
+                role: 'admin',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
-                res.body.id.should.eql(5)
+                res.body.status.should.eql('ok');
+                res.body.id.should.eql(5);
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should 400 when creating a user without a password', done => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user/new')
@@ -453,22 +463,22 @@ describe('POST /api/user/:id', () => {
                 email: 'idontexist@fake.com',
                 givenname: 'Dude',
                 status: 'active',
-                role: 'admin'
+                role: 'admin',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(400);
-                res.body.status.should.eql('error')
-                res.body.error.should.eql('Error - required field missing')
+                res.body.status.should.eql('error');
+                res.body.error.should.eql('Error - required field missing');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should 400 when creating a user without required properties', done => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user/new')
@@ -477,22 +487,22 @@ describe('POST /api/user/:id', () => {
                 givenname: 'Dude',
                 password: 'changeme',
                 status: 'active',
-                role: 'admin'
+                role: 'admin',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(400);
-                res.body.status.should.eql('error')
-                res.body.error.should.eql('Error - required field missing')
+                res.body.status.should.eql('error');
+                res.body.error.should.eql('Error - required field missing');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should update a user when admin', done => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user/2')
@@ -504,11 +514,11 @@ describe('POST /api/user/:id', () => {
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should update a user when apikey provided', done => {
         chai.request(server)
             .post('/api/user/2')
@@ -521,16 +531,16 @@ describe('POST /api/user/:id', () => {
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should update a user including password when admin', done => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user/2')
@@ -538,12 +548,12 @@ describe('POST /api/user/:id', () => {
                 email: 'none1@none.com',
                 givenname: 'User',
                 username: 'useractive2',
-                password: 'changeme'
+                password: 'changeme',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 res.type.should.eql('application/json');
                 done();
             });
@@ -556,12 +566,12 @@ describe('POST /api/user/:id', () => {
                 email: 'none1@none.com',
                 givenname: 'User',
                 username: 'useractive2',
-                password: 'changeme2'
+                password: 'changeme2',
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 res.type.should.eql('application/json');
                 done();
             });
@@ -570,57 +580,57 @@ describe('POST /api/user/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .post('/api/user/deleteMultiple')
             .send({
-                deleteList: [2, 3]
+                deleteList: [2, 3],
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should delete multiple users if apikey provided', done => {
         chai.request(server)
             .post('/api/user/deleteMultiple')
             .set('apikey', 'reallylongkeythatneedstobechanged')
             .send({
-                deleteList: [2, 3]
+                deleteList: [2, 3],
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should 400 if provided with invalid deleteList', done => {
         chai.request(server)
             .post('/api/user/deleteMultiple')
             .set('apikey', 'reallylongkeythatneedstobechanged')
             .send({
-                deleteList: [2, 'useractive']
+                deleteList: [2, 'useractive'],
             })
             .end((err, res) => {
                 should.not.exist(err);
                 res.status.should.eql(400);
-                res.body.status.should.eql('error')
-                res.body.error.should.eql('id list contained non-numbers')
+                res.body.status.should.eql('error');
+                res.body.error.should.eql('id list contained non-numbers');
                 res.type.should.eql('application/json');
                 done();
             });
-    });  
+    });
     it('should return a 401 when not admin', done => {
         passportStub.login({
             username: 'useractive',
             password: 'changeme',
-            role: 'user'
+            role: 'user',
         });
         chai.request(server)
             .post('/api/user/new')
@@ -659,13 +669,13 @@ describe('DELETE /api/user/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .delete('/api/user/2')
             .end((err, res) => {
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 done();
             });
     });
@@ -675,7 +685,7 @@ describe('DELETE /api/user/:id', () => {
             .set('apikey', 'reallylongkeythatneedstobechanged')
             .end((err, res) => {
                 res.status.should.eql(200);
-                res.body.status.should.eql('ok')
+                res.body.status.should.eql('ok');
                 done();
             });
     });
@@ -685,7 +695,7 @@ describe('DELETE /api/user/:id', () => {
             .set('apikey', 'reallylongkeythatneedstobechanged')
             .end((err, res) => {
                 res.status.should.eql(400);
-                res.body.error.should.eql('User ID 1 is protected')
+                res.body.error.should.eql('User ID 1 is protected');
                 done();
             });
     });
@@ -693,7 +703,7 @@ describe('DELETE /api/user/:id', () => {
         passportStub.login({
             username: 'useractive',
             password: 'changeme',
-            role: 'user'
+            role: 'user',
         });
         chai.request(server)
             .delete('/api/user/2')
@@ -732,7 +742,7 @@ describe('GET /api/userCheck/username/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/userCheck/username/useractive')
@@ -740,7 +750,7 @@ describe('GET /api/userCheck/username/:id', () => {
                 should.not.exist(err);
                 res.status.should.eql(200);
                 res.type.should.eql('application/json');
-                res.body.username.should.eql('useractive')
+                res.body.username.should.eql('useractive');
                 done();
             });
     });
@@ -748,7 +758,7 @@ describe('GET /api/userCheck/username/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/userCheck/username/idontexist')
@@ -764,7 +774,7 @@ describe('GET /api/userCheck/username/:id', () => {
         passportStub.login({
             username: 'useractive',
             password: 'changeme',
-            role: 'user'
+            role: 'user',
         });
         chai.request(server)
             .get('/api/userCheck/username/idontexist')
@@ -803,7 +813,7 @@ describe('GET /api/userCheck/email/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/userCheck/email/none1@none.com')
@@ -811,7 +821,7 @@ describe('GET /api/userCheck/email/:id', () => {
                 should.not.exist(err);
                 res.status.should.eql(200);
                 res.type.should.eql('application/json');
-                res.body.email.should.eql('none1@none.com')
+                res.body.email.should.eql('none1@none.com');
                 done();
             });
     });
@@ -819,7 +829,7 @@ describe('GET /api/userCheck/email/:id', () => {
         passportStub.login({
             username: 'adminactive',
             password: 'changeme',
-            role: 'admin'
+            role: 'admin',
         });
         chai.request(server)
             .get('/api/userCheck/email/idontexist@none.com')
@@ -835,7 +845,7 @@ describe('GET /api/userCheck/email/:id', () => {
         passportStub.login({
             username: 'useractive',
             password: 'changeme',
-            role: 'user'
+            role: 'user',
         });
         chai.request(server)
             .get('/api/userCheck/email/idontexist@none.com')

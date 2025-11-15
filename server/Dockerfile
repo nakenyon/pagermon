@@ -49,9 +49,6 @@ ENV APP_NAME=PagerMon \
 #
 COPY . .
 
-# TODO: Change to ENV mounts or create config on the fly
-RUN cp config/docker-default.json config/config.json
-
 EXPOSE 3000
 
 CMD ["node", "app.js"] 

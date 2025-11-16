@@ -4,13 +4,12 @@ const LocalAPIKeyStrategy = require('passport-localapikey-update').Strategy;
 
 const nconf = require('nconf');
 
-const confFile = './config/config.json';
-nconf.file({ file: confFile });
-
 const init = require('./passport');
 const db = require('../knex/knex');
+const { comparePass } = require('./helper');
 
-const authHelper = require('../middleware/authhelper');
+const confFile = './config/config.json';
+nconf.file({ file: confFile });
 
 const options = {};
 
@@ -27,7 +26,7 @@ passport.use(
                 if (!user) {
                     return done(null, false);
                 }
-                if (!authHelper.comparePass(password, user.password)) {
+                if (!comparePass(password, user.password)) {
                     return done(null, false);
                 }
                 return done(null, user);

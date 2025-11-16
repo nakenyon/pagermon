@@ -1,10 +1,9 @@
-var nconf = require('nconf');
+const nconf = require('nconf');
 
-var confFile = './config/config.json';
-var dbtype = nconf.get('database:type');
+const dbtype = nconf.get('database:type');
 
-exports.up = function(db) {
-    if (dbtype == 'sqlite3') {
+exports.up = (db) => {
+    if (dbtype === 'sqlite3') {
         return Promise.all([
             db.raw(`
             CREATE TRIGGER IF NOT EXISTS messages_search_index_insert AFTER INSERT ON messages BEGIN
@@ -44,9 +43,9 @@ exports.up = function(db) {
             `),
         ]);
     }
-    return new Promise((resolve, rejects) => {
+    return new Promise((resolve) => {
         resolve('Not Required');
     });
 };
 
-exports.down = function(db) {};
+exports.down = () => {};

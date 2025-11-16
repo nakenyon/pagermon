@@ -1,58 +1,59 @@
-var push = require('pushover-notifications');
-var logger = require('../log');
+const Push = require('pushover-notifications');
+const logger = require('../log');
 
 function run(trigger, scope, data, config, callback) {
-    var pConf = data.pluginconf.Pushover;
+    const pConf = data.pluginconf.Pushover;
     if (pConf && pConf.enable) {
-        //ensure key has been entered before trying to push
-        if (pConf.group == 0 || pConf.group == '0' || !pConf.group) {
-          logger.main.error('Pushover: ' + data.address + ' No User/Group key set. Please enter User/Group Key.');
+        // ensure key has been entered before trying to push
+        if (pConf.group === 0 || pConf.group === '0' || !pConf.group) {
+            logger.main.error(`Pushover: ${data.address} No User/Group key set. Please enter User/Group Key.`);
             callback();
-          } else {
-            var p = new push({
-              user: pConf.group,
-              token: config.pushAPIKEY,
+        } else {
+            const p = new Push({
+                user: pConf.group,
+                token: config.pushAPIKEY,
             });
 
-            var pushSound;
+            let pushSound;
             if (pConf.sound) {
-              pushSound = pConf.sound.value;
+                pushSound = pConf.sound.value;
             }
 
-            var pushPri = 0; // default
+            let pushPri = 0; // default
             if (pConf.priority) {
-              pushPri = pConf.priority.value;
+                pushPri = pConf.priority.value;
             }
-            
-            var msg = {
-              message: data.message,
-              title: data.agency+' - '+data.alias,
-              sound: pushSound,
-              priority: pushPri,
-              onerror: function(err) {
-                logger.main.error('Pushover:', err);
-                }
+
+            const msg = {
+                message: data.message,
+                title: `${data.agency} - ${data.alias}`,
+                sound: pushSound,
+                priority: pushPri,
+                onerror(err) {
+                    logger.main.error('Pushover:', err);
+                },
             };
 
-            if (pushPri == 2 || pushPri == '2') {
-              //emergency message
-              msg.retry = 60;
-              msg.expire = 240;
-              logger.main.info("SENDING EMERGENCY PUSH NOTIFICATION")
+            if (pushPri === 2 || pushPri === '2') {
+                // emergency message
+                msg.retry = 60;
+                msg.expire = 240;
+                logger.main.info('SENDING EMERGENCY PUSH NOTIFICATION');
             }
 
-            p.send(msg, function (err, result) {
-              if (err) { logger.main.error('Pushover:' + err); }
-              logger.main.debug('Pushover:' + result);
-              callback();
+            p.send(msg, (err, result) => {
+                if (err) {
+                    logger.main.error(`Pushover:${err}`);
+                }
+                logger.main.debug(`Pushover:${result}`);
+                callback();
             });
-          }
+        }
     } else {
         callback();
     }
-
 }
 
 module.exports = {
-    run: run
-}
+    run,
+};

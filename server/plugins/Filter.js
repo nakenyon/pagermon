@@ -1,5 +1,7 @@
-var logger = require('../log');
-function run(trigger, scope, data, config, callback) {
+const logger = require('../log');
+
+function run(trigger, scope, dataIn, config, callback) {
+    const data = dataIn;
     if (config.ignoreallbutAddress) {
         if (!data.address.match(new RegExp(config.ignoreallbutAddress))) {
             data.pluginData.ignore = true;
@@ -28,5 +30,5 @@ function run(trigger, scope, data, config, callback) {
 }
 
 module.exports = {
-    run: run
-}
+    run,
+};

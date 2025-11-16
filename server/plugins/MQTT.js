@@ -11,7 +11,7 @@ function run(trigger, scope, data, config, callback) {
             password: config.password,
         });
 
-        client.on('error', error => {
+        client.on('error', (error) => {
             logger.main.error(`MQTT: failed to connect to MQTT server: ${error}`);
             callback();
         });
@@ -21,7 +21,7 @@ function run(trigger, scope, data, config, callback) {
 
             const baseTopic = config.baseTopic || 'pagermon';
             const retainBaseTopic = config.retainBaseTopic === true;
-            const alias = data.alias;
+            const { alias } = data;
             const aliasId = data.alias_id;
             const stateData = {
                 id: data.id,
@@ -39,10 +39,14 @@ function run(trigger, scope, data, config, callback) {
             logger.main.debug('MQTT: publishing messages');
 
             // Publish latest message
-            client.publish(`${baseTopic}`, JSON.stringify(stateData), { retain: retainBaseTopic });
+            client.publish(`${baseTopic}`, JSON.stringify(stateData), {
+                retain: retainBaseTopic,
+            });
 
             // Publish latest message per alias
-            client.publish(`${baseTopic}/${aliasId}`, JSON.stringify(stateData), { retain: retainBaseTopic });
+            client.publish(`${baseTopic}/${aliasId}`, JSON.stringify(stateData), {
+                retain: retainBaseTopic,
+            });
 
             if (config.enableHomeAssistant === true) {
                 // If home assistant integration activated, send discovery message

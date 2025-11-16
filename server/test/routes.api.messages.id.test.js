@@ -15,9 +15,9 @@ nconf.file({ file: confFile });
 nconf.load();
 
 const passportStub = require('passport-stub');
-// eslint-disable-next-line vars-on-top
-var server = require('../app');
-const db = require('../knex/knex.js');
+
+const server = require('../app');
+const db = require('../knex/knex');
 // This needs to be sorted out, use a different config file when testing?
 
 // Force someconfigs back to default
@@ -43,7 +43,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /api/messages/id', () => {
-    it('should not show capcode in hidecapcode mode if not logged in ', done => {
+    it('should not show capcode in hidecapcode mode if not logged in ', (done) => {
         nconf.set('messages:HideCapcode', true);
         nconf.save();
         chai.request(server)
@@ -60,7 +60,7 @@ describe('GET /api/messages/id', () => {
                 done();
             });
     });
-    it('should show capcode in hidecapcode mode if logged in ', done => {
+    it('should show capcode in hidecapcode mode if logged in ', (done) => {
         nconf.set('messages:HideCapcode', true);
         nconf.save();
         passportStub.login({
@@ -81,7 +81,7 @@ describe('GET /api/messages/id', () => {
                 done();
             });
     });
-    it('should not return message for onlyShowLoggedIn alias if not logged in ', done => {
+    it('should not return message for onlyShowLoggedIn alias if not logged in ', (done) => {
         chai.request(server)
             .get('/api/messages/7')
             .end((err, res) => {
@@ -93,7 +93,7 @@ describe('GET /api/messages/id', () => {
                 done();
             });
     });
-    it('should return message for onlyShowLoggedIn alias if logged in ', done => {
+    it('should return message for onlyShowLoggedIn alias if logged in ', (done) => {
         nconf.set('messages:HideCapcode', true);
         nconf.save();
         passportStub.login({
@@ -116,7 +116,7 @@ describe('GET /api/messages/id', () => {
                 done();
             });
     });
-    it('should 401 if securemode is enabled and not logged in ', done => {
+    it('should 401 if securemode is enabled and not logged in ', (done) => {
         nconf.set('messages:apiSecurity', true);
         nconf.save();
         chai.request(server)
@@ -128,7 +128,7 @@ describe('GET /api/messages/id', () => {
                 done();
             });
     });
-    it('should 200 if securemode is enabled and logged in ', done => {
+    it('should 200 if securemode is enabled and logged in ', (done) => {
         nconf.set('messages:apiSecurity', true);
         nconf.save();
         passportStub.login({
@@ -151,7 +151,7 @@ describe('GET /api/messages/id', () => {
                 done();
             });
     });
-    it('should not return message when capcode is set to ignore ', done => {
+    it('should not return message when capcode is set to ignore ', (done) => {
         chai.request(server)
             .get('/api/messages/5')
             .end((err, res) => {

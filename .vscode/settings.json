@@ -10,5 +10,21 @@
   // tell the ESLint plugin to run on save
   "editor.codeActionsOnSave": {
     "source.fixAll": "never"
-  }
+  },
+  "eslint.format.enable": true,
+  "eslint.probe": [
+    "astro",
+    "civet",
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "html",
+    "mdx",
+    "vue",
+    "markdown",
+    "json",
+    "jsonc"
+  ],
+  "eslint.codeActionsOnSave.rules": null
 }

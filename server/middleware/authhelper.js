@@ -1,13 +1,13 @@
-// pass passport for configuration
+// use passport singleton (don't require auth/local to avoid circular deps)
 const bcrypt = require('bcryptjs');
-var nconf = require('nconf');
+const nconf = require('nconf');
+const passport = require('passport');
 
-var confFile = './config/config.json';
+const confFile = './config/config.json';
 nconf.file({ file: confFile });
 nconf.load();
 
 function isLoggedIn(req, res, next) {
-    const passport = require('../auth/local');
     if (req.isAuthenticated()) {
         // if user is authenticated in the session, carry on
         return next();
@@ -15,18 +15,13 @@ function isLoggedIn(req, res, next) {
     // perform api authentication - all api keys are assumed to be admin
     return (
         passport.authenticate('login-api', { session: false, failWithError: true })(req, res, next),
-        function(next) {
-            next();
-        },
-        function(res) {
-            return res.status(401).json({ error: 'Authentication failed.' });
-        }
+        (iNext) => iNext(),
+        (iRes) => iRes.status(401).json({ error: 'Authentication failed.' })
     );
 }
 
 function isLoggedInMessages(req, res, next) {
-    const passport = require('../auth/local');
-    var apiSecurity = nconf.get('messages:apiSecurity');
+    const apiSecurity = nconf.get('messages:apiSecurity');
     if (apiSecurity) {
         // check if Secure mode is on
         if (req.isAuthenticated()) {
@@ -35,41 +30,37 @@ function isLoggedInMessages(req, res, next) {
         }
         // perform api authentication - all api keys are assumed to be admin
         return (
-            passport.authenticate('login-api', { session: false, failWithError: true })(req, res, next),
-            function(next) {
-                next();
-            },
-            function(res) {
-                return res.status(401).json({ error: 'Authentication failed.' });
-            }
+            passport.authenticate('login-api', {
+                session: false,
+                failWithError: true,
+            })(req, res, next),
+            (iNext) => iNext(),
+            (iRes) => iRes.status(401).json({ error: 'Authentication failed.' })
         );
     }
     return next();
 }
 
 function isAdminGUI(req, res, next) {
-    if (req.isAuthenticated() && req.user.role == 'admin') {
+    if (req.isAuthenticated() && req.user.role === 'admin') {
         // if the user is authenticated and the user's role is admin carry on
         return next();
     }
-    res.redirect('/');
+    return res.redirect('/');
 }
 
 function isAdmin(req, res, next) {
-    const passport = require('../auth/local');
-    if (req.isAuthenticated() && req.user.role == 'admin') {
+    const isAuthenticated = req.isAuthenticated();
+    const userRole = req?.user?.role;
+    if (isAuthenticated && userRole === 'admin') {
         // if the user is authenticated and the user's role is admin carry on
         return next();
     }
     // if apikey in header perform api authentication - all api keys are assumed to be admin
     return (
         passport.authenticate('login-api', { session: false, failWithError: true })(req, res, next),
-        function(next) {
-            next();
-        },
-        function(res) {
-            return res.status(401).json({ error: 'Authentication failed.' });
-        }
+        (iNext) => iNext(),
+        (iRes) => iRes.status(401).json({ error: 'Authentication failed.' })
     );
 }
 

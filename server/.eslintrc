@@ -1,14 +1,30 @@
 {
+    "env": {
+        "node": true,
+        "es2021": true,
+        "mocha": true
+    },
+    "parserOptions": {
+        "ecmaVersion": "latest",
+        "sourceType": "script"
+    },
     "extends": [
-        "wesbos"
+        "eslint:recommended",
+        "plugin:node/recommended",
+        "airbnb-base",
+        "wesbos",
+        "prettier"
     ],
+    "ignorePatterns": ["themes/**"],
+    "plugins": ["prettier"],
     "rules": {
-        "no-console": 0,
-        "no-unused-expressions": 0,
-        "camelcase": 1,
-        "no-use-before-define": 0,
-        "no-var": 0, // Disable for now!
-        "import/order": 0,
+        "no-console": "off",
+        "no-unused-expressions": "off",
+        "camelcase": "warn",
+        "no-use-before-define": "off",
+        "no-var": "off",
+        "consistent-return": "off",
+        "node/no-unpublished-require": "off",
         "prettier/prettier": [
             "error",
             {

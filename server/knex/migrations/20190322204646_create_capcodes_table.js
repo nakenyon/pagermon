@@ -1,21 +1,16 @@
-var nconf = require('nconf');
+const nconf = require('nconf');
 
-var confFile = './config/config.json';
-var dbtype = nconf.get('database:type');
+const dbtype = nconf.get('database:type');
 
-exports.up = function(db) {
-    return db.schema.hasTable('capcodes').then(function(exists) {
+exports.up = (db) =>
+    db.schema.hasTable('capcodes').then((exists) => {
         if (!exists) {
-            return db.schema.createTable('capcodes', table => {
-                if (dbtype == 'mysql') {
+            return db.schema.createTable('capcodes', (table) => {
+                if (dbtype === 'mysql') {
                     table.charset('utf8');
                     table.collate('utf8_general_ci');
                 }
-                table
-                    .increments('id')
-                    .primary()
-                    .unique()
-                    .notNullable();
+                table.increments('id').primary().unique().notNullable();
                 table.string('address', [255]).notNullable();
                 table.text('alias').notNullable();
                 table.text('agency');
@@ -26,12 +21,9 @@ exports.up = function(db) {
                 table.unique(['id', 'address'], 'cc_pk_idx');
             });
         }
-        return new Promise((resolve, rejects) => {
+        return new Promise((resolve) => {
             resolve('Not Required');
         });
     });
-};
 
-exports.down = function(db) {
-    return db.schema.dropTable('capcodes');
-};
+exports.down = (db) => db.schema.dropTable('capcodes');

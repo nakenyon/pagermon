@@ -1,13 +1,13 @@
 const axios = require('axios').default;
-var logger = require('../log');
+const logger = require('../log');
 
 function run(trigger, scope, data, config, callback) {
     const pConf = data.pluginconf.AdvancedWebhook;
     // Conditions for sending - alias enabled, sending all messages, sending defined aliases and this message has an alias
     if (
         (pConf && pConf.enable) ||
-        config.filterMode.value == '2' ||
-        (config.filterMode.value == '1' && data.alias_id)
+        config.filterMode.value === '2' ||
+        (config.filterMode.value === '1' && data.alias_id)
     ) {
         // Get the template
         let dat = config.contentTemplate;
@@ -33,10 +33,10 @@ function run(trigger, scope, data, config, callback) {
                 },
                 timeout: 5000, // Timeout 5s
             })
-            .then(res => {
+            .then(() => {
                 logger.main.info('AdvancedWebhook: Message Sent');
             })
-            .catch(error => {
+            .catch((error) => {
                 if (error.response) {
                     // The request was made and the server responded with a status code
                     // that falls out of the range of 2xx

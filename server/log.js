@@ -3,13 +3,13 @@ const winston = require('winston');
 const { format } = winston;
 // const { combine, label, json, cli } = format;
 // load the config file
-var nconf = require('nconf');
+const nconf = require('nconf');
 
-var confFile = './config/config.json';
+const confFile = './config/config.json';
 nconf.file({ file: confFile });
 nconf.load();
 
-var loglevel = nconf.get('global:loglevel');
+const loglevel = nconf.get('global:loglevel');
 
 winston.loggers.add('pagermon', {
     format: format.combine(
@@ -17,7 +17,7 @@ winston.loggers.add('pagermon', {
         format.label({ label: '[pmon]' }),
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         format.prettyPrint(),
-        format.printf(info => `${info.label}  ${info.timestamp}  ${info.level} : ${info.message}`)
+        format.printf((info) => `${info.label}  ${info.timestamp}  ${info.level} : ${info.message}`)
     ),
     transports: [
         new winston.transports.File({
@@ -39,7 +39,7 @@ winston.loggers.add('http', {
         format.colorize(),
         format.label({ label: '[http]' }),
         format.timestamp({ format: 'YYYY-MM-DD HH:MM:SS' }),
-        format.printf(info => `${info.message}`)
+        format.printf((info) => `${info.message}`)
     ),
     transports: [
         new winston.transports.File({
@@ -62,7 +62,7 @@ winston.loggers.add('db', {
         format.label({ label: '[db]' }),
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         format.prettyPrint(),
-        format.printf(info => `${info.label}  ${info.timestamp}  ${info.level} : ${info.message}`)
+        format.printf((info) => `${info.label}  ${info.timestamp}  ${info.level} : ${info.message}`)
     ),
     transports: [
         new winston.transports.File({
@@ -85,7 +85,7 @@ winston.loggers.add('auth', {
         format.label({ label: '[auth]' }),
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         format.prettyPrint(),
-        format.printf(info => `${info.label}  ${info.timestamp}  ${info.level} : ${info.message}`)
+        format.printf((info) => `${info.label}  ${info.timestamp}  ${info.level} : ${info.message}`)
     ),
     transports: [
         new winston.transports.File({
@@ -109,8 +109,8 @@ module.exports = {
     auth: winston.loggers.get('auth'),
 };
 module.exports.http.stream = {
-    write(message, encoding) {
-        var httpLog = winston.loggers.get('http');
+    write(message) {
+        const httpLog = winston.loggers.get('http');
         httpLog.debug(message.substring(0, message.lastIndexOf('\n')));
     },
 };

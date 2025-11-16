@@ -1,21 +1,20 @@
-var nconf = require('nconf');
+const nconf = require('nconf');
 
-var confFile = './config/config.json';
-var dbtype = nconf.get('database:type');
-exports.up = function(db) {
-    if (dbtype == 'mysql') {
+const dbtype = nconf.get('database:type');
+exports.up = (db) => {
+    if (dbtype === 'mysql') {
         return db.schema
-            .table('messages', function(table) {
+            .table('messages', (table) => {
                 table.dropForeign('alias_id');
             })
-            .then(function() {
-                return db.schema
-                    .table('messages', function(table) {
+            .then(() =>
+                db.schema
+                    .table('messages', (table) => {
                         table.dropColumn('alias_id');
                     })
-                    .then(function() {
-                        return db.schema
-                            .table('messages', function(table) {
+                    .then(() =>
+                        db.schema
+                            .table('messages', (table) => {
                                 table
                                     .integer('alias_id')
                                     .unsigned()
@@ -23,17 +22,17 @@ exports.up = function(db) {
                                     .inTable('capcodes')
                                     .onDelete('SET NULL');
                             })
-                            .then(function() {
+                            .then(() => {
                                 nconf.set('database:aliasRefreshRequired', 1);
                                 nconf.save();
                                 return Promise.resolve();
-                            });
-                    });
-            });
+                            })
+                    )
+            );
     }
-    return new Promise((resolve, rejects) => {
+    return new Promise((resolve) => {
         resolve('Not Required');
     });
 };
 
-exports.down = function(db) {};
+exports.down = () => {};

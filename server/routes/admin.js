@@ -1,27 +1,22 @@
-var express = require('express');
-var bodyParser = require('body-parser');
+const express = require('express');
+const bodyParser = require('body-parser');
 
-var router = express.Router();
-var bcrypt = require('bcryptjs');
-var fs = require('fs');
-var logger = require('../log');
-var util = require('util');
-var passport = require('../auth/local'); // pass passport for configuration
+const router = express.Router();
+const fs = require('fs');
+var nconf = require('nconf');
 const authHelper = require('../middleware/authhelper');
 
-router.use(function(req, res, next) {
+router.use((req, res, next) => {
     res.locals.login = req.isAuthenticated();
     res.locals.user = req.user;
     res.locals.monitorName = nconf.get('global:monitorName');
     next();
 });
 
-var nconf = require('nconf');
+const configFile = './config/config.json';
+const configBackup = './config/backup.json';
 
-var confFile = './config/config.json';
-var conf_backup = './config/backup.json';
-
-nconf.file({ file: confFile });
+nconf.file({ file: configFile });
 nconf.load();
 
 router.use(bodyParser.json()); // to support JSON-encoded bodies
@@ -34,32 +29,33 @@ router.use(
 
 router
     .route('/settingsData')
-    .get(authHelper.isAdmin, function(req, res, next) {
+    .get(authHelper.isAdmin, (req, res) => {
         nconf.load();
         const settings = nconf.get();
         // logger.main.debug(util.format('Config:\n\n%o',settings));
         const plugins = [];
-        fs.readdirSync('./plugins').forEach(file => {
+        fs.readdirSync('./plugins').forEach((file) => {
             if (file.endsWith('.json')) {
+                // eslint-disable-next-line import/no-dynamic-require, global-require
                 const pConf = require(`../plugins/${file}`);
                 if (!pConf.disable) plugins.push(pConf);
             }
         });
         const themes = [];
-        fs.readdirSync('./themes').forEach(file => {
+        fs.readdirSync('./themes').forEach((file) => {
             themes.push(file);
         });
         // logger.main.debug(util.format('Plugin Config:\n\n%o',plugins));
         const data = { settings, plugins, themes };
         res.json(data);
     })
-    .post(authHelper.isAdmin, function(req, res, next) {
+    .post(authHelper.isAdmin, (req, res) => {
         nconf.load();
         if (req.body) {
             // console.log(req.body);
-            var currentConfig = nconf.get();
-            fs.writeFileSync(conf_backup, JSON.stringify(currentConfig, null, 2));
-            fs.writeFileSync(confFile, JSON.stringify(req.body, null, 2));
+            const currentConfig = nconf.get();
+            fs.writeFileSync(configBackup, JSON.stringify(currentConfig, null, 2));
+            fs.writeFileSync(configFile, JSON.stringify(req.body, null, 2));
             nconf.load();
             res.status(200).send({ status: 'ok' });
         } else {
@@ -67,7 +63,7 @@ router
         }
     });
 
-router.get('*', authHelper.isAdminGUI, function(req, res, next) {
+router.get('*', authHelper.isAdminGUI, (req, res) => {
     res.render('admin', { pageTitle: 'Admin' });
 });
 

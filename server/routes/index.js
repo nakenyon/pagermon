@@ -1,15 +1,13 @@
-var confFile = './config/config.json';
-var express = require('express');
+const confFile = './config/config.json';
+const express = require('express');
 
-var router = express.Router();
-var nconf = require('nconf');
+const router = express.Router();
+const nconf = require('nconf');
 
 nconf.file({ file: confFile });
 nconf.load();
 
-const passport = require('../auth/local');
-
-router.use(function(req, res, next) {
+router.use((req, res, next) => {
     res.locals.login = req.isAuthenticated();
     res.locals.user = req.user || false;
     res.locals.register = nconf.get('auth:registration');
@@ -30,7 +28,7 @@ router.use(function(req, res, next) {
 });
 
 /* GET home page. */
-router.get('/', function(req, res, next) {
+router.get('/', (req, res) => {
     if (nconf.get('messages:apiSecurity') && !req.isAuthenticated()) {
         req.flash('loginMessage', 'You need to be logged in to access this page');
         res.status(401).redirect('/auth/login');

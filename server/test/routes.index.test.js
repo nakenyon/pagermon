@@ -11,10 +11,10 @@ const confFile = './config/config.json';
 // load the config file
 const nconf = require('nconf');
 
-const server = require('../app');
-const db = require('../knex/knex.js');
-// This needs to be sorted out, use a different config file when testing?
 const passportStub = require('passport-stub');
+const server = require('../app');
+const db = require('../knex/knex');
+// This needs to be sorted out, use a different config file when testing?
 
 passportStub.install(server);
 
@@ -36,7 +36,7 @@ beforeEach(() =>
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
 describe('GET /', () => {
-    it('should return the home page', done => {
+    it('should return the home page', (done) => {
         nconf.set('messages:apiSecurity', false);
         nconf.save();
         chai.request(server)
@@ -64,7 +64,7 @@ describe('GET /', () => {
                                 done();
                         });
         }); */
-    it('should return the index if a user is logged in and apiSecurity enabled', done => {
+    it('should return the index if a user is logged in and apiSecurity enabled', (done) => {
         nconf.set('messages:apiSecurity', true);
         nconf.save();
         passportStub.login({

@@ -3,13 +3,12 @@ const LocalStrategy = require('passport-local').Strategy;
 const LocalAPIKeyStrategy = require('passport-localapikey-update').Strategy;
 
 const nconf = require('nconf');
-const logger = require('../log');
 
 const confFile = './config/config.json';
 nconf.file({ file: confFile });
 
 const init = require('./passport');
-const db = require('../knex/knex.js');
+const db = require('../knex/knex');
 
 const authHelper = require('../middleware/authhelper');
 
@@ -24,7 +23,7 @@ passport.use(
         db('users')
             .where('username', '=', username)
             .first()
-            .then(user => {
+            .then((user) => {
                 if (!user) {
                     return done(null, false);
                 }
@@ -33,20 +32,20 @@ passport.use(
                 }
                 return done(null, user);
             })
-            .catch(err => done(err));
+            .catch((err) => done(err));
     })
 );
 
 passport.use(
     'login-api',
-    new LocalAPIKeyStrategy(function(apikey, done) {
+    new LocalAPIKeyStrategy((apikey, done) => {
         nconf.load();
         const auth = nconf.get('auth');
-        const key = auth.keys.find(x => x.key === apikey);
+        const key = auth.keys.find((x) => x.key === apikey);
         // var key = auth.keys.find({ key: apikey });
         if (key) {
             // do a bcrypt compare
-            if (apikey == key.key) {
+            if (apikey === key.key) {
                 return done(null, key.name);
             }
             return done(null, false);

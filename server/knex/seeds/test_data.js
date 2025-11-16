@@ -1,6 +1,6 @@
-exports.seed = function(db, Promise) {
+exports.seed = (db) =>
     // Deletes ALL existing entries
-    return db('messages')
+    db('messages')
         .del() // Deletes ALL existing entries
         .then(() => db('capcodes').del())
         .then(() =>
@@ -167,4 +167,3 @@ exports.seed = function(db, Promise) {
                 status: 'disabled',
             })
         );
-};

@@ -1,5 +1,5 @@
 const passport = require('passport');
-var db = require('../knex/knex.js');
+const db = require('../knex/knex');
 
 module.exports = () => {
     passport.serializeUser((user, done) => {
@@ -10,7 +10,7 @@ module.exports = () => {
         db('users')
             .where({ id })
             .first()
-            .then(user => {
+            .then((user) => {
                 // check if user returned, if not invalidate existing cookies
                 if (user) {
                     done(null, user);
@@ -19,7 +19,7 @@ module.exports = () => {
                     done(null, false);
                 }
             })
-            .catch(err => {
+            .catch((err) => {
                 done(err, null);
             });
     });

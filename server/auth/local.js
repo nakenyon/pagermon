@@ -17,21 +17,18 @@ init();
 
 passport.use(
     'login-user',
-    new LocalStrategy(options, (username, password, done) => {
+    new LocalStrategy(options, async (username, password, done) => {
         // check to see if the username exists
-        db('users')
-            .where('username', '=', username)
-            .first()
-            .then((user) => {
-                if (!user) {
-                    return done(null, false);
-                }
-                if (!comparePass(password, user.password)) {
-                    return done(null, false);
-                }
-                return done(null, user);
-            })
-            .catch((err) => done(err));
+        try {
+            const user = await db('users').where('username', '=', username).first();
+
+            if (!(user && comparePass(password, user.password))) {
+                return done(null, false);
+            }
+            return done(null, user);
+        } catch (err) {
+            done(err);
+        }
     })
 );
 
@@ -42,14 +39,12 @@ passport.use(
         const auth = nconf.get('auth');
         const key = auth.keys.find((x) => x.key === apikey);
         // var key = auth.keys.find({ key: apikey });
-        if (key) {
-            // do a bcrypt compare
-            if (apikey === key.key) {
-                return done(null, key.name);
-            }
-            return done(null, false);
-        }
-        return done(null, false);
+        if (!key) return done(null, false);
+
+        // do a bcrypt compare
+        if (apikey !== key.key) return done(null, false);
+
+        return done(null, key.name);
     })
 );
 

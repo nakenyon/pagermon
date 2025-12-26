@@ -11,12 +11,13 @@
     "extends": [
         "eslint:recommended",
         "plugin:node/recommended",
+        "plugin:jsdoc/recommended",
         "airbnb-base",
         "wesbos",
         "prettier"
     ],
     "ignorePatterns": ["themes/**"],
-    "plugins": ["prettier"],
+    "plugins": ["prettier", "jsdoc"],
     "rules": {
         "no-console": "off",
         "no-unused-expressions": "off",
@@ -28,6 +29,7 @@
         "prettier/prettier": [
             "error",
             {
+                "plugins": ["prettier-plugin-jsdoc"],
                 "trailingComma": "es5",
                 "singleQuote": true,
                 "printWidth": 120,

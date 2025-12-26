@@ -9,7 +9,8 @@
   },
   // tell the ESLint plugin to run on save
   "editor.codeActionsOnSave": {
-    "source.fixAll": "never"
+    "source.fixAll": "never",
+    "source.fixAll.eslint": "always"
   },
   "eslint.format.enable": true,
   "eslint.probe": [
@@ -26,5 +27,4 @@
     "json",
     "jsonc"
   ],
-  "eslint.codeActionsOnSave.rules": null
 }

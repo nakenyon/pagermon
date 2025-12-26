@@ -3,7 +3,9 @@ const nconf = require('nconf');
 const dbtype = nconf.get('database:type');
 
 exports.up = (db) => {
-    if (dbtype === 'sqlite3') {
+    if (dbtype !== 'sqlite3') 
+        return "Not Required";
+    
         return Promise.all([
             db.raw(`
             CREATE TRIGGER IF NOT EXISTS messages_search_index_insert AFTER INSERT ON messages BEGIN
@@ -42,10 +44,16 @@ exports.up = (db) => {
                         WHERE messages.id NOT IN (SELECT rowid FROM messages_search_index);
             `),
         ]);
-    }
-    return new Promise((resolve) => {
-        resolve('Not Required');
-    });
+    
 };
 
-exports.down = () => {};
+exports.down = (db) => {
+    if (dbtype !== 'sqlite3') 
+        return 'Not Required'
+    }
+    return Promise.all([
+        db.raw('DROP TRIGGER IF EXISTS messages_search_index_insert;'),
+        db.raw('DROP TRIGGER IF EXISTS messages_search_index_update;'),
+        db.raw('DROP TRIGGER IF EXISTS messages_search_index_delete;'),
+    ]);
+};

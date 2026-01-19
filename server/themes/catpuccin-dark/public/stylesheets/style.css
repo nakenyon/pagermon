@@ -1,0 +1,122 @@
+/* Catppuccin Macchiato theme for Pagermon */
+body {
+  background-color: #24273a;
+  color: #cad3f5;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+a {
+  color: #8aadf4;
+}
+
+a:hover, a:focus {
+  color: #b7bdf8;
+  text-decoration: underline;
+}
+
+.navbar {
+  background-color: #1e2030;
+  border-bottom: 1px solid #363a4f;
+}
+
+.navbar-brand,
+.navbar-nav > li > a {
+  color: #cad3f5 !important;
+}
+
+.navbar-brand:hover,
+.navbar-nav > li > a:hover {
+  color: #8aadf4 !important;
+}
+
+.panel {
+  background-color: #1e2030;
+  border: 1px solid #363a4f;
+  color: #cad3f5;
+}
+
+.panel-heading {
+  background-color: #181926;
+  border-bottom: 1px solid #363a4f;
+  color: #cad3f5;
+}
+
+.panel-body {
+  background-color: #24273a;
+}
+
+.table {
+  background-color: #1e2030;
+  color: #cad3f5;
+}
+
+.table > thead > tr > th {
+  background-color: #181926;
+  color: #b8c0e0;
+  border-color: #363a4f;
+}
+
+.table > tbody > tr > td {
+  border-color: #363a4f;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: #24273a;
+}
+
+.table-striped > tbody > tr:nth-of-type(even) {
+  background-color: #1e2030;
+}
+
+.btn {
+  color: #cad3f5;
+  background-color: #363a4f;
+  border: 1px solid #494d64;
+}
+
+.btn:hover {
+  background-color: #494d64;
+}
+
+.btn-primary {
+  background-color: #8aadf4;
+  border-color: #8aadf4;
+  color: #181926;
+}
+
+.btn-primary:hover {
+  background-color: #b7bdf8;
+  border-color: #b7bdf8;
+}
+
+.alert {
+  background-color: #363a4f;
+  color: #cad3f5;
+  border: 1px solid #494d64;
+}
+
+.alert-info {
+  background-color: #7dc4e4;
+  color: #181926;
+}
+
+.alert-success {
+  background-color: #a6da95;
+  color: #181926;
+}
+
+.alert-warning {
+  background-color: #eed49f;
+  color: #181926;
+}
+
+.alert-danger {
+  background-color: #ed8796;
+  color: #181926;
+}
+
+footer {
+  background-color: #1e2030;
+  color: #a5adcb;
+  border-top: 1px solid #363a4f;
+}

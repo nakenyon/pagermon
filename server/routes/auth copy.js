@@ -127,12 +127,9 @@ router.route('/login')
         });
 
 router.route('/logout').get(authHelper.isLoggedIn, function(req, res) {
-        const {username} = req.user;
-        req.logout(function(err) {
-                if (err) { return next(err); }
-        });
+        req.logout();
         res.redirect('/');
-        logger.auth.debug(`Successful Logout ${username}`);
+        logger.auth.debug(`Successful Logout ${req.user.username}`);
 });
 
 router.route('/profile/').get(authHelper.isLoggedIn, function(req, res) {
@@ -182,7 +179,7 @@ router.route('/profile/:id')
                                 })
                                 .then(result => {
                                         console.timeEnd('insert');
-                                        res.status(200).send({ status: 'ok', id: result[0].id });
+                                        res.status(200).send({ status: 'ok', id: result });
                                 })
                                 .catch(err => {
                                         console.timeEnd('insert');

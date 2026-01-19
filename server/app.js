@@ -205,7 +205,7 @@ app.use(function(err, req, res, next) {
 
   // render the error page
   res.status(err.status || 500);
-  res.render(path.join(__dirname,'themes',theme, 'views', 'global', 'error'), { title: title });
+
 });
 
 // Add cronjob to automatically refresh aliases

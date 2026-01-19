@@ -78,6 +78,8 @@ server/config/backup.json
 server/bin/
 client/config/config.json
 client/config/backup.json
+client/config/dauphin-remote-config.json
+client/config/skook-config.json
 
 # sqlite
 

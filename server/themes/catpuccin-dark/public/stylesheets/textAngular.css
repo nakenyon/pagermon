@@ -1,0 +1,50 @@
+/* Catppuccin Macchiato theme for Pagermon textAngular */
+.ta-toolbar {
+  background-color: #1e2030;
+  border: 1px solid #363a4f;
+  color: #cad3f5;
+}
+
+.ta-toolbar .btn {
+  background-color: #363a4f;
+  color: #cad3f5;
+  border: 1px solid #494d64;
+}
+
+.ta-toolbar .btn:hover {
+  background-color: #494d64;
+  color: #cad3f5;
+}
+
+.ta-editor {
+  background-color: #24273a;
+  color: #cad3f5;
+  border: 1px solid #363a4f;
+}
+
+.ta-editor p {
+  color: #cad3f5;
+}
+
+.ta-editor a {
+  color: #8aadf4;
+}
+
+.ta-editor a:hover {
+  color: #b7bdf8;
+}
+
+.ta-editor h1, .ta-editor h2, .ta-editor h3, .ta-editor h4, .ta-editor h5 {
+  color: #b8c0e0;
+}
+
+.ta-editor blockquote {
+  border-left: 5px solid #8aadf4;
+  color: #a5adcb;
+  background-color: #1e2030;
+  padding: 10px;
+}
+
+.ta-resizer-handle-overlay {
+  background-color: #8aadf4;
+}

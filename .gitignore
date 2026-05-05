@@ -96,3 +96,8 @@ server/coverage/
 
 # macOS Spotlight
 **/.DS_Store
+client/config/dauphin-remote-config.json
+client/config/skook-config.json
+server/capcodes.sql
+server/protection.sql
+server/users.sql

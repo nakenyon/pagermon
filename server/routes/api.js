@@ -195,14 +195,12 @@ router.route('/messages')
             var timeFind = _.find(matches, function (msg) { return msg.datetime > timeDiff; });
             if (timeFind) {
               logger.main.info(util.format('Ignoring duplicate: %o', data.message));
-              res.status(200);
-              return res.send('Ignoring duplicate');
+              return res.status(200).send('Ignoring duplicate');
             }
           } else {
             // if no dupeTime then just end the search now, we have matches
             logger.main.info(util.format('Ignoring duplicate: %o', data.message));
-            res.status(200);
-            return res.send('Ignoring duplicate');
+            return res.status(200).send('Ignoring duplicate');
           }
         }
         // no matches, maintain the array
@@ -227,8 +225,7 @@ router.route('/messages')
         }
         if (data.pluginData.ignore) {
           // stop processing
-          res.status(200);
-          return res.send('Ignoring filtered');
+          return res.status(200).send('Ignoring filtered');
         }
         var address = data.address || '0000000';
         var message = data.message || 'null';
@@ -283,8 +280,7 @@ router.route('/messages')
           .then((row) => {
             if (row.length > 0 && filterDupes) {
               logger.main.info(util.format('Ignoring duplicate: %o', message));
-              res.status(200);
-              res.send('Ignoring duplicate');
+              res.status(200).send('Ignoring duplicate');
             } else {
               db.from('capcodes')
                 .select('id', 'ignore')
@@ -459,8 +455,7 @@ router.route('/messages')
                         logger.main.error(err)
                       })
                   } else {
-                    res.status(200);
-                    res.send('Ignoring filtered');
+                    res.status(200).send('Ignoring filtered');
                   }
                 })
                 .catch((err) => {
@@ -766,16 +761,15 @@ router.route('/capcodes')
         })
         .returning('id')
         .then((result) => {
-          res.status(200);
-          res.send('' + result);
+          res.status(200).send('' + result);
           if (!updateRequired || updateRequired == 0) {
             nconf.set('database:aliasRefreshRequired', 1);
             nconf.save();
           }
         })
         .catch((err) => {
-          logger.main.error(err)
-            .status(500).send(err);
+          logger.main.error(err);
+          res.status(500).send(err);
         })
       logger.main.debug(util.format('%o', req.body || 'no request body'));
     } else {
@@ -788,12 +782,10 @@ router.route('/capcodes/agency')
     db.from('capcodes')
       .distinct('agency')
       .then((rows) => {
-        res.status(200);
-        res.json(rows);
+        res.status(200).json(rows);
       })
       .catch((err) => {
-        res.status(500);
-        res.send(err);
+        res.status(500).send(err);
       })
   });
 
@@ -804,8 +796,7 @@ router.route('/capcodes/agency/:id')
       .select('*')
       .where('agency', 'like', id)
       .then((rows) => {
-        res.status(200);
-        res.json(rows);
+        res.status(200).json(rows);
       })
       .catch((err) => {
         logger.main.error(err);
@@ -827,8 +818,7 @@ router.route('/capcodes/:id')
       "pluginconf": {}
     };
     if (id == 'new') {
-      res.status(200);
-      res.json(defaults);
+      res.status(200).json(defaults);
     } else {
       db.from('capcodes')
         .select('*')
@@ -837,11 +827,9 @@ router.route('/capcodes/:id')
           if (row.length > 0) {
             row = row[0]
             row.pluginconf = parseJSON(row.pluginconf);
-            res.status(200);
-            res.json(row);
+            res.status(200).json(row);
           } else {
-            res.status(200);
-            res.json(defaults);
+            res.status(200).json(defaults);
           }
         })
         .catch((err) => {
@@ -1019,8 +1007,7 @@ router.route('/capcodeCheck/:id')
         if (row.length > 0) {
           row = row[0]
           row.pluginconf = parseJSON(row.pluginconf);
-          res.status(200);
-          res.json(row);
+          res.status(200).json(row);
         } else {
           row = {
             "id": "",
@@ -1032,8 +1019,7 @@ router.route('/capcodeCheck/:id')
             "ignore": 0,
             "pluginconf": {}
           };
-          res.status(200);
-          res.json(row);
+          res.status(200).json(row);
         }
       })
       .catch((err) => {
@@ -1191,8 +1177,7 @@ router.route('/capcodeImport')
           };
           //Gather all the results, format for the frontend and send it back.
           let results = { "results": importresults }
-          res.status(200)
-          res.json(results)
+          res.status(200).json(results)
           logger.main.debug('Import:' + JSON.stringify(importresults))
           nconf.set('database:aliasRefreshRequired', 1);
           nconf.save();
@@ -1271,8 +1256,7 @@ router.route('/userCheck/username/:id')
       .then((row) => {
         if (row.length > 0) {
           row = row[0]
-          res.status(200);
-          res.json(row);
+          res.status(200).json(row);
         } else {
           row = {
             "username": "",
@@ -1283,8 +1267,7 @@ router.route('/userCheck/username/:id')
             "role": "user",
             "status": "active"
           };
-          res.status(200);
-          res.json(row);
+          res.status(200).json(row);
         }
       })
       .catch((err) => {
@@ -1302,8 +1285,7 @@ router.route('/userCheck/username/:id')
       .then((row) => {
         if (row.length > 0) {
           row = row[0]
-          res.status(200);
-          res.json(row);
+          res.status(200).json(row);
         } else {
           row = {
             "username": "",
@@ -1314,8 +1296,7 @@ router.route('/userCheck/username/:id')
             "role": "user",
             "status": "active"
           };
-          res.status(200);
-          res.json(row);
+          res.status(200).json(row);
         }
       })
       .catch((err) => {
@@ -1337,8 +1318,7 @@ router.route('/user/:id')
       "status": "active"
     };
     if (id == 'new') {
-      res.status(200);
-      res.json(defaults);
+      res.status(200).json(defaults);
     } else {
       db.from('users')
         .select('id','givenname','surname','username','email','role','status','lastlogondate')
@@ -1346,11 +1326,9 @@ router.route('/user/:id')
         .then(function (row) {
           if (row.length > 0) {
             row = row[0]
-            res.status(200);
-            res.json(row);
+            res.status(200).json(row);
           } else {
-            res.status(200);
-            res.json(defaults);
+            res.status(200).json(defaults);
           }
         })
         .catch((err) => {

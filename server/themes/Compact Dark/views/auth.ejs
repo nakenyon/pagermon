@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html ng-app=app lang="en">
+<% include global/header.ejs %>
+<% include global/header-admin.ejs %>
+<base href="/auth/">
+</head>
+<script src="/javascripts/auth.main.js"></script>
+<body id="admin-body">
+  <!-- Domain Change Banner -->
+  <div style="background-color: #d44406; color: white; padding: 15px; text-align: center; font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+    ⚠️ Domain Updated: You have been automatically redirected to <a href="https://dauphin.allehryn.win" style="color: white; text-decoration: underline;">dauphin.allehryn.win</a>
+        <br>
+    📡 York County paging log now available! Reach out to me if you want access.
+  </div>
+  </div>
+  <!-- End Banner -->
+  <% include global/menu.ejs %>
+<div id="content" class="container" ng-cloak>
+<ng-view></ng-view>
+</div>
+<% include global/footer.ejs %></body>

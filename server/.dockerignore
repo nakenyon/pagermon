@@ -8,4 +8,3 @@ messages.db
 .eslintrc
 .nycrc
 Dockerfile*
-docker-entrypoint.sh

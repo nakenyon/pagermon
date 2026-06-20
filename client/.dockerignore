@@ -4,4 +4,3 @@ config/config.json
 samples
 *.md
 Dockerfile*
-docker-entrypoint.sh

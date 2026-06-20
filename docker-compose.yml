@@ -1,16 +1,103 @@
-version: '3.3'
+version: '3.8'
+
+# Duplicate a server+client block for each additional instance.
+# Each instance needs a unique port, data directory, and (for the client)
+# RTL_DEVICE index if multiple dongles are on the same host.
+
 services:
-    pagermon:
-        build: ./server
-        image: pagermon
-        container_name: pagermon
-        ports:
-            - 3000:3000
-        volumes:
-            - ./data:/config
-        environment:
-            - TZ=Europe/London
-            - NODE_ENV=production
-            - HOSTNAME=localhost
-            - USE_COOKIE_HOST=false
-            - APP_NAME=pagermon
+
+  # ── Instance 1 ──────────────────────────────────────────────────────────
+  pagermon-server1:
+    build: ./server
+    image: pagermon-server
+    container_name: pagermon-server1
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./data/server1:/data
+    environment:
+      - NODE_ENV=production
+      - TZ=America/Chicago
+    restart: unless-stopped
+    networks:
+      - pagermon
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  pagermon-client1:
+    build: ./client
+    image: pagermon-client
+    container_name: pagermon-client1
+    devices:
+      - /dev/bus/usb:/dev/bus/usb   # pass through entire USB bus for RTL-SDR access
+    volumes:
+      - ./data/client1:/data
+    environment:
+      - PAGERMON_SERVER=http://pagermon-server1:3000
+      - PAGERMON_API_KEY=changeme    # must match a key in server1's config.json
+      - PAGERMON_IDENTIFIER=CLIENT1
+      - RTL_FREQ=453.600M
+      - RTL_GAIN=28
+      - RTL_SQUELCH=2
+      - RTL_DEVICE=0                 # index of RTL-SDR dongle
+      - MULTIMON_PROTOCOL=POCSAG1200
+    depends_on:
+      pagermon-server1:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pagermon
+
+  # ── Instance 2 ──────────────────────────────────────────────────────────
+  pagermon-server2:
+    build: ./server
+    image: pagermon-server
+    container_name: pagermon-server2
+    ports:
+      - "3002:3000"
+    volumes:
+      - ./data/server2:/data
+    environment:
+      - NODE_ENV=production
+      - TZ=America/Chicago
+    restart: unless-stopped
+    networks:
+      - pagermon
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  pagermon-client2:
+    build: ./client
+    image: pagermon-client
+    container_name: pagermon-client2
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    volumes:
+      - ./data/client2:/data
+    environment:
+      - PAGERMON_SERVER=http://pagermon-server2:3000
+      - PAGERMON_API_KEY=changeme
+      - PAGERMON_IDENTIFIER=CLIENT2
+      - RTL_FREQ=462.950M            # different frequency for instance 2
+      - RTL_GAIN=28
+      - RTL_SQUELCH=2
+      - RTL_DEVICE=1                 # second dongle
+      - MULTIMON_PROTOCOL=POCSAG1200
+    depends_on:
+      pagermon-server2:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pagermon
+
+networks:
+  pagermon:
+    driver: bridge

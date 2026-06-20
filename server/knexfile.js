@@ -3,7 +3,7 @@ var confFile = './config/config.json';
 var logger = require('./log');
 var loglevel = nconf.get('global:loglevel');
 
-if(loglevel = 'debug') {
+if(loglevel === 'debug') {
   var debugon = true
 } else {
   var debugon = false

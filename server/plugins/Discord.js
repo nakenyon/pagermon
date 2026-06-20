@@ -1,60 +1,42 @@
-var discord = require('discord.js');
-var toHex = require('colornames');
-var logger = require('../log');
-var util = require('util');
+const { WebhookClient, EmbedBuilder } = require('discord.js');
+const toHex = require('colornames');
+const logger = require('../log');
+const util = require('util');
 
 function run(trigger, scope, data, config, callback) {
-    var dConf = data.pluginconf.Discord;
+    const dConf = data.pluginconf.Discord;
     if (dConf && dConf.enable) {
-        // var hostname = nconf.get('hostname');
-        var hostname = process.env.HOSTNAME || '';
-        //Ensure webhook ID and Token have been entered into the alias. 
-        if (dConf.webhook == 0 || !dConf.webhook) {
+        if (!dConf.webhook) {
             logger.main.error('Discord: ' + data.address + ' No Webhook URL set. Please enter Webhook URL.');
-            callback();
-        } else {
-            // we should probably not do this and take the id/token separately
-            var webhook = dConf.webhook.split('/');
-            var discwebhookid = webhook[5];
-            var discwebhooktoken = webhook[6];
-
-            var d = new discord.WebhookClient(discwebhookid, discwebhooktoken);
-
-            //Use embedded discord notification format from discord.js 
-            var notificationembed = new discord.RichEmbed({
-                timestamp: new Date(),
-            });
-            // toHex doesn't support putting HEX in, needs to check and skip over if already hex. 
-            var isHex = /^#[0-9A-F]{6}$/i.test(data.color)
-            if (!isHex || isHex == false) {
-                var discordcolor = toHex(data.color)
-            } else {
-                var discordcolor = data.color
-            }
-            notificationembed.setColor(discordcolor);
-            notificationembed.setTitle(`**${data.agency} - ${data.alias}**`);
-            notificationembed.setDescription(`${data.message}`);
-            if (hostname == undefined || !hostname) {
-                logger.main.debug('Discord: Hostname not set in config file using pagermon github')
-                notificationembed.setAuthor('PagerMon', '', `https://github.com/davidmckenzie/pagermon`);
-            } else {
-                notificationembed.setAuthor('PagerMon', '', `${hostname}`);
-            }
-            //Print notification template when debugging enabled
-            logger.main.debug(util.format('%o',notificationembed));
-            d.send(notificationembed)
-                .then(
-                    logger.main.info(`Discord: Message Sent`))
-                .catch(function(err) {
-                'Discord: ' + logger.main.error(err);
-                });
-            callback();
+            return callback();
         }
+
+        const hostname = process.env.HOSTNAME || '';
+        const d = new WebhookClient({ url: dConf.webhook });
+
+        const isHex = /^#[0-9A-F]{6}$/i.test(data.color);
+        const discordcolor = (!isHex && data.color) ? toHex(data.color) : data.color;
+
+        const notificationembed = new EmbedBuilder()
+            .setTimestamp()
+            .setColor(discordcolor)
+            .setTitle(`${data.agency} - ${data.alias}`)
+            .setDescription(`${data.message}`)
+            .setAuthor(hostname
+                ? { name: 'PagerMon', url: hostname }
+                : { name: 'PagerMon', url: 'https://github.com/davidmckenzie/pagermon' }
+            );
+
+        logger.main.debug(util.format('%o', notificationembed));
+        d.send({ embeds: [notificationembed] })
+            .then(() => logger.main.info('Discord: Message Sent'))
+            .catch(err => logger.main.error('Discord: ' + err))
+            .finally(() => d.destroy());
+
+        callback();
     } else {
         callback();
     }
 }
 
-module.exports = {
-    run: run
-}
+module.exports = { run };

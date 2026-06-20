@@ -206,7 +206,7 @@ router.route('/messages')
         // no matches, maintain the array
         var dupeArrayLimit = dupeLimit;
         if (dupeArrayLimit == 0) {
-          dupeArrayLimit == 25; // should provide sufficient buffer, consider increasing if duplicates appear when users have no dupeLimit
+          dupeArrayLimit = 25; // should provide sufficient buffer, consider increasing if duplicates appear when users have no dupeLimit
         }
         if (msgBuffer.length > dupeArrayLimit) {
           msgBuffer.shift();
@@ -287,10 +287,10 @@ router.route('/messages')
                 // TODO: test this doesn't break other DBs - there's a lot of quote changes here
                 .modify(function (queryBuilder) {
                   if (dbtype == 'oracledb') {
-                    queryBuilder.whereRaw(`'${address}' LIKE "address"`)
+                    queryBuilder.whereRaw('? LIKE "address"', [address])
                     queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
                   } else {
-                    queryBuilder.whereRaw(`"${address}" LIKE address`)
+                    queryBuilder.whereRaw('? LIKE address', [address])
                     queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`)
                   }
                 })

@@ -1,0 +1,11 @@
+node_modules
+.git
+test
+logs/*.log
+config/config.json
+messages.db
+*.md
+.eslintrc
+.nycrc
+Dockerfile*
+docker-entrypoint.sh

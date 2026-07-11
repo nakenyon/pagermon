@@ -45,6 +45,9 @@ services:
       - RTL_SQUELCH=2
       - RTL_DEVICE=0                 # index of RTL-SDR dongle
       - MULTIMON_PROTOCOL=POCSAG1200
+      - MULTIMON_B=1                 # multimon-ng -b value
+      # - RTL_FM_EXTRA_ARGS=         # extra rtl_fm flags with no dedicated var above
+      # - MULTIMON_EXTRA_ARGS=-e     # extra multimon-ng flags with no dedicated var above
     depends_on:
       pagermon-server1:
         condition: service_healthy
@@ -91,6 +94,9 @@ services:
       - RTL_SQUELCH=2
       - RTL_DEVICE=1                 # second dongle
       - MULTIMON_PROTOCOL=POCSAG1200
+      - MULTIMON_B=1                 # multimon-ng -b value
+      # - RTL_FM_EXTRA_ARGS=         # extra rtl_fm flags with no dedicated var above
+      # - MULTIMON_EXTRA_ARGS=-e     # extra multimon-ng flags with no dedicated var above
     depends_on:
       pagermon-server2:
         condition: service_healthy

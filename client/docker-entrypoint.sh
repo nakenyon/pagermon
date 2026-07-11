@@ -26,7 +26,13 @@ GAIN="${RTL_GAIN:-28}"
 SQUELCH="${RTL_SQUELCH:-2}"
 DEVICE="${RTL_DEVICE:-0}"
 PROTOCOL="${MULTIMON_PROTOCOL:-POCSAG1200}"
+MULTIMON_B="${MULTIMON_B:-1}"
 
-rtl_fm -d "$DEVICE" -E dc -F 0 -g "$GAIN" -l "$SQUELCH" -A fast -f "$FREQ" -s22050 - 2>/dev/null | \
-    multimon-ng -q -b1 -c -a "$PROTOCOL" -f alpha -t raw /dev/stdin 2>/dev/null | \
+# Extra raw args appended to each command, for flags with no dedicated env var
+# above (e.g. multimon-ng's -e). Left empty, these are no-ops.
+RTL_FM_EXTRA_ARGS="${RTL_FM_EXTRA_ARGS:-}"
+MULTIMON_EXTRA_ARGS="${MULTIMON_EXTRA_ARGS:-}"
+
+rtl_fm -d "$DEVICE" -E dc -F 0 -g "$GAIN" -l "$SQUELCH" -A fast -f "$FREQ" -s22050 $RTL_FM_EXTRA_ARGS - 2>/dev/null | \
+    multimon-ng -q -b"$MULTIMON_B" -c -a "$PROTOCOL" -f alpha -t raw $MULTIMON_EXTRA_ARGS /dev/stdin 2>/dev/null | \
     node reader.js

@@ -29,6 +29,51 @@ Some environments prepend pager messages with a timestamp - by default reader.js
 
 Check the samples dir for example usage.
 
+### Running in Docker
+
+The client image builds `rtl_fm` and `multimon-ng` from source (not the
+Debian-packaged `rtl-sdr`, which doesn't include RTL-SDR Blog V3/V4 dongle
+support) and drives them entirely through environment variables - no config
+file editing needed for the radio side. See `docker-compose.yml` for a
+working example.
+
+**PagerMon connection**
+
+| Variable              | Maps to             | Default   |
+|------------------------|--------------------|-----------|
+| `PAGERMON_SERVER`      | `config.hostname`   | -         |
+| `PAGERMON_API_KEY`     | `config.apikey`     | -         |
+| `PAGERMON_IDENTIFIER`  | `config.identifier` | -         |
+
+**rtl_fm**
+
+| Variable            | Flag | Meaning                                      | Default        |
+|----------------------|------|-----------------------------------------------|----------------|
+| `RTL_FREQ`          | `-f` | Frequency to tune to, e.g. `460.400M`         | `453.600M`     |
+| `RTL_DEVICE`        | `-d` | Dongle index (`0`, `1`, ...) or serial string | `0`            |
+| `RTL_SQUELCH`       | `-l` | Squelch level, `0` disables                   | `0`            |
+| `RTL_GAIN`          | `-g` | Tuner gain in dB                              | unset (automatic gain) |
+| `RTL_PPM`           | `-p` | PPM frequency correction                      | unset (`0`)    |
+| `RTL_BIAS_TEE`      | `-T` | `"true"` enables bias-T power for powered antennas | unset (off) |
+| `RTL_FM_EXTRA_ARGS` |      | Any extra raw `rtl_fm` flags, space-separated | unset          |
+
+**multimon-ng**
+
+| Variable                | Flag | Meaning                                                        | Default        |
+|--------------------------|------|-----------------------------------------------------------------|----------------|
+| `MULTIMON_PROTOCOL`     | `-a` | Demodulator to enable, e.g. `POCSAG1200`                        | `POCSAG1200`   |
+| `MULTIMON_B`            | `-b` | POCSAG BCH error-correction level, `0` disables                | `2`            |
+| `MULTIMON_INVERT`       | `-i` | `"true"` inverts input samples - try this if a signal is present but nothing decodes | unset (off) |
+| `MULTIMON_HIDE_EMPTY`   | `-e` | `"false"` shows empty POCSAG messages too                       | `true`         |
+| `MULTIMON_QUIET`        | `-q` | `"true"` silences the startup banner/demodulator list           | unset (off, so `docker logs` shows device/tuner detection at boot) |
+| `MULTIMON_VERBOSITY`    | `-v` | Verbosity level, e.g. `1` for decode stats                      | unset          |
+| `MULTIMON_EXTRA_ARGS`   |      | Any extra raw `multimon-ng` flags, space-separated              | unset          |
+
+If a signal is clearly present at the configured frequency (confirm with
+`rtl_power`) but nothing ever decodes, check in this order: frequency/protocol
+match the actual system, `RTL_GAIN`/`RTL_SQUELCH` aren't cutting off real
+signal, then try `MULTIMON_INVERT=true`.
+
 ### Import.js
 
 The `import.js` script can be used to import capcode aliases from PDW filters.ini or a generic CSV file.

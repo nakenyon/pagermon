@@ -40,14 +40,22 @@ services:
       - PAGERMON_SERVER=http://pagermon-server1:3000
       - PAGERMON_API_KEY=changeme    # must match a key in server1's config.json
       - PAGERMON_IDENTIFIER=CLIENT1
-      - RTL_FREQ=453.600M
-      - RTL_GAIN=28
-      - RTL_SQUELCH=2
-      - RTL_DEVICE=0                 # index of RTL-SDR dongle
-      - MULTIMON_PROTOCOL=POCSAG1200
-      - MULTIMON_B=1                 # multimon-ng -b value
-      # - RTL_FM_EXTRA_ARGS=         # extra rtl_fm flags with no dedicated var above
-      # - MULTIMON_EXTRA_ARGS=-e     # extra multimon-ng flags with no dedicated var above
+      # -- rtl_fm --
+      - RTL_FREQ=453.600M            # -f  frequency to tune to
+      - RTL_DEVICE=0                 # -d  dongle index (0, 1, ...) or serial string
+      - RTL_SQUELCH=0                # -l  squelch level, 0 disables
+      # - RTL_GAIN=                  # -g  tuner gain in dB; unset = automatic gain
+      # - RTL_PPM=                   # -p  ppm frequency correction; unset = 0
+      # - RTL_BIAS_TEE=true          # -T  enable bias-T power for powered antennas
+      # - RTL_FM_EXTRA_ARGS=         # any extra rtl_fm flags, space-separated
+      # -- multimon-ng --
+      - MULTIMON_PROTOCOL=POCSAG1200 # -a  demodulator to enable
+      - MULTIMON_B=2                 # -b  POCSAG BCH error-correction level, 0 disables
+      # - MULTIMON_INVERT=true       # -i  invert input samples; try this if signal is present but nothing decodes
+      # - MULTIMON_HIDE_EMPTY=false  # -e  defaults to true (hide empty POCSAG messages)
+      # - MULTIMON_QUIET=true        # -q  silence the startup banner/demodulator list
+      # - MULTIMON_VERBOSITY=        # -v  verbosity level, e.g. 1 for decode stats
+      # - MULTIMON_EXTRA_ARGS=       # any extra multimon-ng flags, space-separated
     depends_on:
       pagermon-server1:
         condition: service_healthy
@@ -89,14 +97,22 @@ services:
       - PAGERMON_SERVER=http://pagermon-server2:3000
       - PAGERMON_API_KEY=changeme
       - PAGERMON_IDENTIFIER=CLIENT2
-      - RTL_FREQ=462.950M            # different frequency for instance 2
-      - RTL_GAIN=28
-      - RTL_SQUELCH=2
-      - RTL_DEVICE=1                 # second dongle
-      - MULTIMON_PROTOCOL=POCSAG1200
-      - MULTIMON_B=1                 # multimon-ng -b value
-      # - RTL_FM_EXTRA_ARGS=         # extra rtl_fm flags with no dedicated var above
-      # - MULTIMON_EXTRA_ARGS=-e     # extra multimon-ng flags with no dedicated var above
+      # -- rtl_fm --
+      - RTL_FREQ=462.950M            # -f  frequency to tune to (different frequency for instance 2)
+      - RTL_DEVICE=1                 # -d  dongle index (0, 1, ...) or serial string (second dongle)
+      - RTL_SQUELCH=0                # -l  squelch level, 0 disables
+      # - RTL_GAIN=                  # -g  tuner gain in dB; unset = automatic gain
+      # - RTL_PPM=                   # -p  ppm frequency correction; unset = 0
+      # - RTL_BIAS_TEE=true          # -T  enable bias-T power for powered antennas
+      # - RTL_FM_EXTRA_ARGS=         # any extra rtl_fm flags, space-separated
+      # -- multimon-ng --
+      - MULTIMON_PROTOCOL=POCSAG1200 # -a  demodulator to enable
+      - MULTIMON_B=2                 # -b  POCSAG BCH error-correction level, 0 disables
+      # - MULTIMON_INVERT=true       # -i  invert input samples; try this if signal is present but nothing decodes
+      # - MULTIMON_HIDE_EMPTY=false  # -e  defaults to true (hide empty POCSAG messages)
+      # - MULTIMON_QUIET=true        # -q  silence the startup banner/demodulator list
+      # - MULTIMON_VERBOSITY=        # -v  verbosity level, e.g. 1 for decode stats
+      # - MULTIMON_EXTRA_ARGS=       # any extra multimon-ng flags, space-separated
     depends_on:
       pagermon-server2:
         condition: service_healthy

@@ -8,7 +8,7 @@ FROM node:18-bookworm-slim
 # errors anywhere. Build the current osmocom/rtl-sdr driver from source
 # instead - Blog V4 support was upstreamed there. See https://www.rtl-sdr.com/V4/
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake git libusb-1.0-0-dev pkg-config \
+    ca-certificates build-essential cmake git libusb-1.0-0-dev pkg-config \
     multimon-ng \
     && git clone https://github.com/osmocom/rtl-sdr /tmp/rtl-sdr \
     && cd /tmp/rtl-sdr && mkdir build && cd build \

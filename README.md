@@ -156,6 +156,22 @@ docker compose down
 **Tip:** you probably want to set up Docker log rotation - see
 [here](https://success.docker.com/article/how-to-setup-log-rotation-post-installation).
 
+#### Migrating an existing bare-metal install
+
+To move an existing (non-Docker) server over instead of starting fresh:
+
+1. Stop the bare-metal service.
+2. Copy your existing `config/config.json` and `messages.db` into the
+   instance's data directory, e.g. `./data/server1/config.json` and
+   `./data/server1/messages.db`.
+3. `docker compose up -d`.
+
+The entrypoint always repoints `database.file` at `/data/messages.db` on
+every boot (regardless of what it was set to in the file you copied in),
+so your existing sqlite database is what gets used - nothing gets
+silently reset to a fresh one. Everything else in `config.json` (users,
+API keys, session secret, plugin settings) carries over as-is.
+
 ## Running the client
 
 ### Local setup

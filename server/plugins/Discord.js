@@ -11,7 +11,13 @@ function run(trigger, scope, data, config, callback) {
             return callback();
         }
 
-        const hostname = process.env.HOSTNAME || '';
+        // HOSTNAME may be a bare domain (as used for the session cookie
+        // domain - see app.js) rather than a full URL; discord.js requires
+        // a full URL here and throws on anything else, so normalize it.
+        const rawHostname = process.env.HOSTNAME || '';
+        const hostname = rawHostname && !/^https?:\/\//i.test(rawHostname)
+            ? `https://${rawHostname}`
+            : rawHostname;
         const d = new WebhookClient({ url: dConf.webhook });
 
         const isHex = /^#[0-9A-F]{6}$/i.test(data.color);

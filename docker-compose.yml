@@ -1,8 +1,9 @@
-version: '3.8'
-
 # Duplicate a server+client block for each additional instance.
 # Each instance needs a unique port, data directory, and (for the client)
 # RTL_DEVICE index if multiple dongles are on the same host.
+#
+# Copy .env.example to .env and customize it - do not edit the defaults
+# below in place, they exist only as a fallback.
 
 services:
 
@@ -12,12 +13,16 @@ services:
     image: pagermon-server
     container_name: pagermon-server1
     ports:
-      - "3001:3000"
+      - "${SERVER1_PORT:-3001}:3000"
     volumes:
       - ./data/server1:/data
     environment:
       - NODE_ENV=production
-      - TZ=America/Chicago
+      - TZ=${TZ:-America/Chicago}
+      # Docker sets HOSTNAME to the container ID by default, not a real
+      # domain - set HOSTNAME1 in .env (see .env.example for details).
+      - HOSTNAME=${HOSTNAME1:-}
+      - USE_COOKIE_HOST=${USE_COOKIE_HOST1:-}
     restart: unless-stopped
     networks:
       - pagermon
@@ -38,24 +43,24 @@ services:
       - ./data/client1:/data
     environment:
       - PAGERMON_SERVER=http://pagermon-server1:3000
-      - PAGERMON_API_KEY=changeme    # must match a key in server1's config.json
-      - PAGERMON_IDENTIFIER=CLIENT1
+      - PAGERMON_API_KEY=${API_KEY1:-changeme}    # must match a key in server1's config.json
+      - PAGERMON_IDENTIFIER=${CLIENT1_IDENTIFIER:-CLIENT1}
       # -- rtl_fm --
-      - RTL_FREQ=453.600M            # -f  frequency to tune to
-      - RTL_DEVICE=0                 # -d  dongle index (0, 1, ...) or serial string
-      - RTL_SQUELCH=0                # -l  squelch level, 0 disables
-      # - RTL_GAIN=                  # -g  tuner gain in dB; unset = automatic gain
-      # - RTL_PPM=                   # -p  ppm frequency correction; unset = 0
-      # - RTL_BIAS_TEE=true          # -T  enable bias-T power for powered antennas
-      # - RTL_FM_EXTRA_ARGS=         # any extra rtl_fm flags, space-separated
+      - RTL_FREQ=${RTL_FREQ1:-453.600M}     # -f  frequency to tune to
+      - RTL_DEVICE=${RTL_DEVICE1:-0}        # -d  dongle index (0, 1, ...) or serial string
+      - RTL_SQUELCH=${RTL_SQUELCH1:-0}      # -l  squelch level, 0 disables
+      - RTL_GAIN=${RTL_GAIN1:-}             # -g  tuner gain in dB; unset = automatic gain
+      - RTL_PPM=${RTL_PPM1:-}               # -p  ppm frequency correction; unset = 0
+      - RTL_BIAS_TEE=${RTL_BIAS_TEE1:-}     # -T  enable bias-T power for powered antennas
+      - RTL_FM_EXTRA_ARGS=${RTL_FM_EXTRA_ARGS1:-} # any extra rtl_fm flags, space-separated
       # -- multimon-ng --
-      - MULTIMON_PROTOCOL=POCSAG1200 # -a  demodulator to enable
-      - MULTIMON_B=2                 # -b  POCSAG BCH error-correction level, 0 disables
-      # - MULTIMON_INVERT=true       # -i  invert input samples; try this if signal is present but nothing decodes
-      # - MULTIMON_HIDE_EMPTY=false  # -e  defaults to true (hide empty POCSAG messages)
-      # - MULTIMON_QUIET=true        # -q  silence the startup banner/demodulator list
-      # - MULTIMON_VERBOSITY=        # -v  verbosity level, e.g. 1 for decode stats
-      # - MULTIMON_EXTRA_ARGS=       # any extra multimon-ng flags, space-separated
+      - MULTIMON_PROTOCOL=${MULTIMON_PROTOCOL1:-POCSAG1200} # -a  demodulator to enable
+      - MULTIMON_B=${MULTIMON_B1:-2}               # -b  POCSAG BCH error-correction level, 0 disables
+      - MULTIMON_INVERT=${MULTIMON_INVERT1:-}      # -i  invert input samples; try this if signal is present but nothing decodes
+      - MULTIMON_HIDE_EMPTY=${MULTIMON_HIDE_EMPTY1:-} # -e  defaults to true (hide empty POCSAG messages)
+      - MULTIMON_QUIET=${MULTIMON_QUIET1:-}        # -q  silence the startup banner/demodulator list
+      - MULTIMON_VERBOSITY=${MULTIMON_VERBOSITY1:-} # -v  verbosity level, e.g. 1 for decode stats
+      - MULTIMON_EXTRA_ARGS=${MULTIMON_EXTRA_ARGS1:-} # any extra multimon-ng flags, space-separated
     depends_on:
       pagermon-server1:
         condition: service_healthy
@@ -69,12 +74,14 @@ services:
     image: pagermon-server
     container_name: pagermon-server2
     ports:
-      - "3002:3000"
+      - "${SERVER2_PORT:-3002}:3000"
     volumes:
       - ./data/server2:/data
     environment:
       - NODE_ENV=production
-      - TZ=America/Chicago
+      - TZ=${TZ:-America/Chicago}
+      - HOSTNAME=${HOSTNAME2:-}
+      - USE_COOKIE_HOST=${USE_COOKIE_HOST2:-}
     restart: unless-stopped
     networks:
       - pagermon
@@ -95,24 +102,24 @@ services:
       - ./data/client2:/data
     environment:
       - PAGERMON_SERVER=http://pagermon-server2:3000
-      - PAGERMON_API_KEY=changeme
-      - PAGERMON_IDENTIFIER=CLIENT2
+      - PAGERMON_API_KEY=${API_KEY2:-changeme}
+      - PAGERMON_IDENTIFIER=${CLIENT2_IDENTIFIER:-CLIENT2}
       # -- rtl_fm --
-      - RTL_FREQ=462.950M            # -f  frequency to tune to (different frequency for instance 2)
-      - RTL_DEVICE=1                 # -d  dongle index (0, 1, ...) or serial string (second dongle)
-      - RTL_SQUELCH=0                # -l  squelch level, 0 disables
-      # - RTL_GAIN=                  # -g  tuner gain in dB; unset = automatic gain
-      # - RTL_PPM=                   # -p  ppm frequency correction; unset = 0
-      # - RTL_BIAS_TEE=true          # -T  enable bias-T power for powered antennas
-      # - RTL_FM_EXTRA_ARGS=         # any extra rtl_fm flags, space-separated
+      - RTL_FREQ=${RTL_FREQ2:-462.950M}     # -f  frequency to tune to (different frequency for instance 2)
+      - RTL_DEVICE=${RTL_DEVICE2:-1}        # -d  dongle index (0, 1, ...) or serial string (second dongle)
+      - RTL_SQUELCH=${RTL_SQUELCH2:-0}      # -l  squelch level, 0 disables
+      - RTL_GAIN=${RTL_GAIN2:-}             # -g  tuner gain in dB; unset = automatic gain
+      - RTL_PPM=${RTL_PPM2:-}               # -p  ppm frequency correction; unset = 0
+      - RTL_BIAS_TEE=${RTL_BIAS_TEE2:-}     # -T  enable bias-T power for powered antennas
+      - RTL_FM_EXTRA_ARGS=${RTL_FM_EXTRA_ARGS2:-} # any extra rtl_fm flags, space-separated
       # -- multimon-ng --
-      - MULTIMON_PROTOCOL=POCSAG1200 # -a  demodulator to enable
-      - MULTIMON_B=2                 # -b  POCSAG BCH error-correction level, 0 disables
-      # - MULTIMON_INVERT=true       # -i  invert input samples; try this if signal is present but nothing decodes
-      # - MULTIMON_HIDE_EMPTY=false  # -e  defaults to true (hide empty POCSAG messages)
-      # - MULTIMON_QUIET=true        # -q  silence the startup banner/demodulator list
-      # - MULTIMON_VERBOSITY=        # -v  verbosity level, e.g. 1 for decode stats
-      # - MULTIMON_EXTRA_ARGS=       # any extra multimon-ng flags, space-separated
+      - MULTIMON_PROTOCOL=${MULTIMON_PROTOCOL2:-POCSAG1200} # -a  demodulator to enable
+      - MULTIMON_B=${MULTIMON_B2:-2}               # -b  POCSAG BCH error-correction level, 0 disables
+      - MULTIMON_INVERT=${MULTIMON_INVERT2:-}      # -i  invert input samples; try this if signal is present but nothing decodes
+      - MULTIMON_HIDE_EMPTY=${MULTIMON_HIDE_EMPTY2:-} # -e  defaults to true (hide empty POCSAG messages)
+      - MULTIMON_QUIET=${MULTIMON_QUIET2:-}        # -q  silence the startup banner/demodulator list
+      - MULTIMON_VERBOSITY=${MULTIMON_VERBOSITY2:-} # -v  verbosity level, e.g. 1 for decode stats
+      - MULTIMON_EXTRA_ARGS=${MULTIMON_EXTRA_ARGS2:-} # any extra multimon-ng flags, space-separated
     depends_on:
       pagermon-server2:
         condition: service_healthy

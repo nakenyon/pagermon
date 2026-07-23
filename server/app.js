@@ -153,16 +153,27 @@ app.use(bodyParser.urlencoded({
 })); // to support URL-encoded bodies
 app.use(cookieParser());
 
+// connect-sqlite3 requires an already-open db connection; without it
+// `new SQLiteStore` throws synchronously on the first request.
+var sessionStoreOptions = {};
+if (dbtype === 'sqlite3') {
+    var sqlite3 = require('sqlite3');
+    sessionStoreOptions.db = new sqlite3.Database(nconf.get('database:file'));
+}
+
 var sessSet = {
     cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }, // 1 week
-    store: new SQLiteStore,
+    store: new SQLiteStore(sessionStoreOptions),
     saveUninitialized: true,
     resave: 'true',
     secret: secret
 }
 
+// HOSTNAME may be a full URL (as used for the Discord embed link - see
+// plugins/Discord.js) rather than a bare domain; a cookie domain can't
+// contain a scheme, so strip one off if present.
 if (process.env.HOSTNAME && process.env.USE_COOKIE_HOST)
-    sessSet.cookie.domain = '.'+process.env.HOSTNAME;
+    sessSet.cookie.domain = '.' + process.env.HOSTNAME.replace(/^https?:\/\//i, '');
 
 app.use(session(sessSet));
 app.use(passport.initialize());

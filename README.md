@@ -113,95 +113,48 @@ https://github.com/pagermon/pagermon/wiki/Tutorial---Production-Ready-Ubuntu,-PM
 
 ### Docker
 
-#### Manual build
+This fork ships a `docker-compose.yml` that runs the server and client as
+separate containers, each with their own image (`server/Dockerfile` and
+`client/Dockerfile`). Prebuilt multi-arch images are also published to
+GHCR on every push - see `.github/workflows/docker-publish.yml`.
 
-You can use image already built for you or you can build it yourself:
-
-``` bash
-# For PC
-docker build -t pagermon/pagermon .
-
-# For Raspberry Pi
-docker build -t pagermon/pagermon:latest-armhf -f Dockerfile.armhf .
-```
-
-#### Running
+#### Quick start
 
 ``` bash
-docker create \
-  --name=pagermon \
-  -e APP_NAME=pagermon \
-  -p 3000:3000 \
-  -e TZ=Europe/London \
-  -v </path/to/config-mount>:/config \
-  --restart unless-stopped \
-  pagermon/pagermon:<VERSION>
-docker start pagermon
+cp .env.example .env
+# edit .env: set API keys, RTL frequencies/device indices, TZ, etc.
+
+docker compose up -d --build
 ```
 
-### docker-compose
+This starts two full server+client pairs (`pagermon-server1`/`pagermon-client1`
+and `pagermon-server2`/`pagermon-client2`) as a template for running multiple
+RTL-SDR dongles/frequencies against separate PagerMon instances on one host.
+Delete the second pair if you only need one instance, or copy the block again
+for a third.
 
-``` yaml
-version: "2"
-services:
-  pagermon:
-    #build: ./server # To build localy
-    image: pagermon/pagermon:<VERSION>
-    container_name: pagermon
-    environment:
-      - APP_NAME=pagermon
-      - PUID=1000 # Not required since node user inside docker has UID 1000
-      - PGID=1000 # Not required since node user inside docker has GID 1000
-      - TZ=Europe/London
-    ports:
-      - "3000:3000"
-    volumes:
-      - </path/to/config-mount>:/config
-    restart: unless-stopped
-```
-
-Then run:
+- Server data (config, sqlite db) persists in `./data/server<N>`.
+- The client needs the RTL-SDR USB dongle passed through via `devices:` -
+  see `client/README.md` for all of the `RTL_*`/`MULTIMON_*` environment
+  variables and what `rtl_fm`/`multimon-ng` flags they map to.
+- After the server is up, log in at `http://localhost:<port>` (default
+  `admin` / `changeme`), change the password, and generate an API key under
+  `/admin/settings` - that's the value that goes in `.env` as `API_KEY1`
+  (must match what the corresponding client sends as `PAGERMON_API_KEY`).
 
 ``` bash
-# Building with compose file
-docker-compose build
+# Rebuild after pulling changes
+docker compose up -d --build
 
-# Running from compose file in foreground
-docker-compose up
+# Follow logs
+docker compose logs -f pagermon-server1
 
-# Running from compose file in background
-docker-compose up -d
+# Stop everything
+docker compose down
 ```
 
-#### Parameters
-
-|Parameter|Function|
-|:-------:|:-------|
-| `-e APP_NAME=<name>` | Application name |
-| `-e HOSTNAME=<hostname>` | Hostname |
-| `-e USE_COOKIE_HOST=true` | Use cookie host. |
-| `-e NO_CHOWN=true`| Disable fixing permissions. |
-| `-e PUID=1000` | for UserID |
-| `-e PGID=1000` | for GroupID |
-| `-e SKIP_APP=true` | Don't start app, useful for development. |
-| `-e TZ=Europe/London` | Specify a timezone to use eg. Europe/London. |
-| `-v <path>:/config` | Mount config diretory, so config persist during container restarts (option 1) |
-| `-v <volumename>:/config` | Create named volume for config diretory, so config persist during container restarts (option 2)|
-| `-v /config` | Create unnamed volume for config diretory, so config persist during container restarts (option 3)|
-| `-p 3000:3000` | Expose container port |
-
-**Note:**
-
-- Configuration is stored in `/config` inside container and it is owned by *node* user with UID/GID 1000. To fix config directory ownership use `-e PUID=<UID>` and `-e PGID=<GID>`. (Here are database and config file stored)
-- The local port `3000` will be forwarded to the docker container to port `3000` (by `-p 3000:3000`)
-- In case you would like to follow the logfile, run `docker logs -f pagermon` (by `--name pagermon`)
-- To shutdown and remove the container (if using compose), run `docker-compose down`
-- If you make changes to the app for testing, you will need to re-build the image, run `docker-compose down && docker-compose up --build`
-- To run on *Raspberry Pi* use **armhf** variant (add `-armhf` at the end of version), but **be aware** that OracleDB does not work there.
-
-See [additional parameters](https://github.com/SloCompTech/docker-baseimage).
-
-**Tip:** You probably want to setup docker log rotation before, more can be found [here](https://success.docker.com/article/how-to-setup-log-rotation-post-installation).
+**Tip:** you probably want to set up Docker log rotation - see
+[here](https://success.docker.com/article/how-to-setup-log-rotation-post-installation).
 
 ## Running the client
 

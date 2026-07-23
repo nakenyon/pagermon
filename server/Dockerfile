@@ -1,9 +1,9 @@
 # Build stage — install native deps (sqlite3 requires compilation on Alpine)
 FROM node:18-alpine AS builder
 WORKDIR /app
-COPY package.json ./
+COPY package.json package-lock.json ./
 RUN apk add --no-cache python3 make g++ gcc musl-dev && \
-    npm install --omit=dev
+    npm ci --omit=dev
 
 # Runtime stage
 FROM node:18-alpine

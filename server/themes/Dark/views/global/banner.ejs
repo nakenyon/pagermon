@@ -1,0 +1,22 @@
+<%
+  // Admin-editable announcement banner (global:banner* in config.json).
+  // Guarded with typeof checks so render paths that don't set these locals
+  // (e.g. the error handler in app.js) degrade to rendering nothing.
+  var _bannerOn = (typeof bannerEnable !== 'undefined') && bannerEnable
+                  && (typeof bannerContent !== 'undefined') && bannerContent;
+  var _bannerSeverity = (typeof bannerSeverity !== 'undefined') ? bannerSeverity : 'info';
+  var _bannerClass = _bannerSeverity === 'critical' ? 'alert-danger'
+                   : _bannerSeverity === 'warning'  ? 'alert-warning'
+                   : 'alert-info';
+  var _bannerIcon = _bannerSeverity === 'critical' ? 'fa-exclamation-triangle'
+                  : _bannerSeverity === 'warning'  ? 'fa-exclamation-circle'
+                  : 'fa-info-circle';
+%>
+<% if (_bannerOn) { %>
+  <div class="container-fluid announcement-banner">
+    <div class="alert <%= _bannerClass %>" role="alert">
+      <i class="fa <%= _bannerIcon %>"></i>
+      <%- bannerContent %>
+    </div>
+  </div>
+<% } %>

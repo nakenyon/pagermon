@@ -184,6 +184,11 @@ app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
 app.use(function(req, res, next) {
   res.locals.version = version;
   res.locals.loglevel = nconf.get('global:loglevel') || 'info';
+  // Announcement banner - set here rather than in routes/index.js so the
+  // login page (/auth) and admin pages pick it up too
+  res.locals.bannerEnable = nconf.get('global:bannerEnable');
+  res.locals.bannerSeverity = nconf.get('global:bannerSeverity');
+  res.locals.bannerContent = nconf.get('global:bannerContent');
   next();
 });
 

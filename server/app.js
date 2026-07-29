@@ -1,4 +1,8 @@
-var version = "0.3.13-beta";
+// Single source of truth for the version - previously this string was hardcoded
+// here and duplicated in package.json, and the two had drifted apart from each
+// other and from the actual release tags. Rendered in the footer via
+// res.locals.version.
+var version = require('./package.json').version;
 
 var debug = require('debug')('pagermon:server');
 var io = require('@pm2/io').init({

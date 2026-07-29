@@ -1,3 +1,29 @@
+# 2026.7.29
+
+First release of the `nakenyon` fork. Versioning switches to CalVer
+(`vYYYY.M.D`) from here — upstream has not cut a release since 0.3.13 in
+September 2023, and this fork has diverged far enough that continuing its
+version line would be misleading.
+
+* Docker support for both server and client, driven entirely by environment
+  variables — no config file editing needed for the radio side.
+* Client image builds `rtl_fm` from the current osmocom/rtl-sdr source rather
+  than Debian's packaged librtlsdr, which silently produces undemodulatable
+  signal on RTL-SDR Blog V3/V4 dongles.
+* Two new themes: Dark and Compact Default, alongside default and Compact Dark.
+* Admin-editable announcement banner, shown on the login page and above the
+  message list, with info/warning/critical severities. Intended for maintenance
+  windows.
+* Fix: successful logins never reset the brute-force counter
+  (`ExpressBrute.reset()` was called with the wrong arguments), so failed
+  attempts accumulated toward a lockout regardless of intervening successes.
+* Fix: every logout returned ECONNRESET instead of a redirect — the handler read
+  `req.user.username` after `req.logout()` had cleared it, throwing after the
+  response headers were already sent.
+* CI rebuilt: images only rebuild when their own directory changes, releases are
+  cut from tags, and the server test suite runs on Node 18 (matching the
+  `engines` field) rather than the previously pinned 12.16.x.
+
 # TBA
 * Fix PiBuilder @marshy #604
 

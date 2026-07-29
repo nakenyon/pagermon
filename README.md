@@ -57,8 +57,7 @@ been exercised mainly by one deployment.
 * **The upstream [contributors](https://github.com/pagermon/pagermon/graphs/contributors)** —
   Daniel Williams, eopo, Nathanial Marsh, DanrwAU, Maxwell Watermolen and others,
   who built nearly everything this fork runs on.
-* **[bullseye555](https://github.com/bullseye555)** — responsive small-screen
-  handling in the default theme, which the Compact themes here build on.
+* **[bullseye555](https://github.com/bullseye555)** — Credit for all of the themes that you see integrated in this fork. 
 
 PagerMon is released into the public domain under the Unlicense, so none of this
 attribution is legally required. It is given because it should be.

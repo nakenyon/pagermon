@@ -94,8 +94,14 @@ router.route('/login')
                                                                         lastlogondate: currentDatetime,
                                                                 })
                                                                 .then(() => {
-                                                                        // reset the bruteforce timer after successful login
-                                                                        bruteforcelogin.reset(null);
+                                                                        // Reset the bruteforce counter after a successful login.
+                                                                        // ExpressBrute's reset() takes (ip, key, callback), so the
+                                                                        // previous `reset(null)` cleared nothing and the counter
+                                                                        // survived every successful login - failures accumulated
+                                                                        // until lockout no matter how many logins succeeded in
+                                                                        // between. req.brute.reset() is attached by the prevent
+                                                                        // middleware and clears the exact key it counted against.
+                                                                        if (req.brute && req.brute.reset) req.brute.reset();
                                                                         if (user.role !== 'admin') {
                                                                                 res.status(200).send({
                                                                                         status: 'ok',
@@ -127,9 +133,15 @@ router.route('/login')
         });
 
 router.route('/logout').get(authHelper.isLoggedIn, function(req, res) {
+        // Capture the username before logout() clears req.user. Reading
+        // req.user.username afterwards throws a TypeError, and because that fired
+        // after res.redirect() had already sent the headers, Express could not turn
+        // it into an error response - the connection was destroyed instead, so every
+        // logout returned ECONNRESET to the client rather than the redirect.
+        const username = req.user && req.user.username;
         req.logout();
+        logger.auth.debug(`Successful Logout ${username}`);
         res.redirect('/');
-        logger.auth.debug(`Successful Logout ${req.user.username}`);
 });
 
 router.route('/profile/').get(authHelper.isLoggedIn, function(req, res) {

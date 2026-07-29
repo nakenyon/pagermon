@@ -22,7 +22,17 @@ nconf.file({ file: confFile });
 nconf.load();
 // set required settings in config file
 
-beforeEach(() => db.migrate.rollback().then(() => db.migrate.latest().then(() => db.seed.run())));
+beforeEach(() =>
+        db.migrate
+                .rollback()
+                .then(() => db.migrate.latest())
+                .then(() => db.seed.run())
+                // express-brute keeps its lockout counters in the `protection` table,
+                // which brute-knex creates itself rather than via a knex migration - so
+                // the rollback above never clears it. Every test file shares one mocha
+                // process and one source IP, so without this the counter accumulates
+                // across the whole run and unrelated tests start getting 429s.
+                .then(() => db('protection').del().catch(() => {})));
 
 afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
 
@@ -131,27 +141,33 @@ describe('POST /auth/login', () => {
                         });
         });
         it('should return a 429 with too many invalid attempts', done => {
-                chai.request(server)
-                        .post('/auth/login')
-                        .send({
-                                username: 'admindisabled',
-                                password: 'changeme',
-                        })
-                        .then(function() {
-                                chai.request(server)
-                                        .post('/auth/login')
-                                        .send({
-                                                username: 'admindisabled',
-                                                password: 'changeme',
-                                        })
-                                        .end((err, res) => {
-                                                should.not.exist(err);
-                                                res.status.should.eql(429);
-                                                res.body.status.should.eql('lockedout');
-                                                res.body.error.should.eql('Too many attempts, please try again later');
-                                                done();
-                                        });
-                        });
+                // routes/auth.js sets freeRetries: 5, so the 6th attempt is the one that
+                // locks out. This previously made only 2 attempts and passed solely
+                // because the brute-force counter was still polluted by earlier tests in
+                // the run; now that the counter starts clean it has to trip the limit on
+                // its own.
+                // The 6th request is the one that starts the minWait timer rather than
+                // being rejected itself, so the 7th - arriving immediately, inside that
+                // wait - is the first to actually get a 429.
+                const ATTEMPTS_BEFORE_LOCKOUT = 6;
+                const attempt = n => {
+                        chai.request(server)
+                                .post('/auth/login')
+                                .send({
+                                        username: 'admindisabled',
+                                        password: 'changeme',
+                                })
+                                .end((err, res) => {
+                                        if (n <= ATTEMPTS_BEFORE_LOCKOUT) {
+                                                return attempt(n + 1);
+                                        }
+                                        res.status.should.eql(429);
+                                        res.body.status.should.eql('lockedout');
+                                        res.body.error.should.eql('Too many attempts, please try again later');
+                                        return done();
+                                });
+                };
+                attempt(1);
         });
 });
 

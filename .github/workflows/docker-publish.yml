@@ -3,19 +3,62 @@ name: Build and publish Docker images
 on:
   push:
     branches:
-      - master
       - docker-dev
     tags:
       - 'v*.*.*'
+  # Escape hatch: path filtering below means a run triggered by an unrelated
+  # change won't rebuild an image. Dispatch manually to force both.
+  workflow_dispatch:
+
+# Cancel a run that's been superseded by a newer push to the same ref (e.g.
+# pushing several commits in quick succession). Keyed on ref rather than sha
+# so that pushing a branch and a release tag for the same commit still
+# produces both image tags - those are different artifacts, not duplicates.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # The server and client images are independent, but a push touching only one
+  # of them used to rebuild both - and the client build cross-compiles for
+  # arm64/armv7 under QEMU, which dominates the run time. Work out what
+  # actually changed so each image only rebuilds when it needs to.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      client: ${{ steps.filter.outputs.client }}
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            server:
+              - 'server/**'
+            client:
+              - 'client/**'
+
   build-server:
     name: Build and push server image
     runs-on: ubuntu-latest
+    needs: changes
+    # Tag pushes and manual dispatches always build both images, so a release
+    # is never a partial set regardless of what the tagged commit touched.
+    if: >-
+      needs.changes.outputs.server == 'true'
+      || startsWith(github.ref, 'refs/tags/')
+      || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
@@ -54,6 +97,11 @@ jobs:
   build-client:
     name: Build and push client image
     runs-on: ubuntu-latest
+    needs: changes
+    if: >-
+      needs.changes.outputs.client == 'true'
+      || startsWith(github.ref, 'refs/tags/')
+      || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write

@@ -8,8 +8,8 @@
 ![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/pagermon/pagermon.svg?label=release&style=plastic)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/pagermon/pagermon.svg?style=plastic)
 ![GitHub contributors](https://img.shields.io/github/contributors/pagermon/pagermon.svg?style=plastic)
-![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/pagermon/pagermon/server.js.yml?branch=master&label=Build%20master)
-![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/pagermon/pagermon/server.js.yml?branch=develop&label=Build%20develop)
+![Tests](https://img.shields.io/github/actions/workflow/status/nakenyon/pagermon/tests.yml?branch=main&label=Tests)
+![Images](https://img.shields.io/github/actions/workflow/status/nakenyon/pagermon/docker-publish.yml?branch=main&label=Images)
 
 PagerMon is an API driven client/server framework for parsing and displaying pager messages from multimon-ng.
 
@@ -284,13 +284,44 @@ All are welcome to contribute. Contributors should submit a pull request with th
 
 CHANGELOG.md is to be updated on each pull request.
 
-If a pull request is the first pull request since a [release](https://github.com/pagermon/pagermon/releases), then the version number should be bumped in `CHANGELOG.md`, `server/app.js`, and `server/package.json`.
-
 If a database schema change is required, this must be done using KnexJS Migration files. **Insert Instructions for this here**
+
+## Branches
+
+- `main` is the trunk and the default branch. Everything is built and released
+  from here.
+- `master` is a read-only mirror of upstream `pagermon/pagermon`. Nothing is
+  developed on it. To pull upstream changes in, fast-forward `master` from
+  `upstream/master`, then merge `master` into `main`.
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/pagermon/pagermon/tags).
+This fork uses CalVer, tagged `vYYYY.M.D` — upstream has not cut a release since
+0.3.13 in September 2023, and this fork has diverged far enough that continuing
+its SemVer line would be misleading. See the
+[tags on this repository](https://github.com/nakenyon/pagermon/tags).
+
+To cut a release:
+
+```bash
+# updates package.json and package-lock.json together - a hand edit desyncs
+# them and breaks the npm ci step in tests.yml
+cd server && npm version YYYY.M.D --no-git-tag-version && cd ..
+cd client && npm version YYYY.M.D --no-git-tag-version && cd ..
+# add a section to CHANGELOG.md, commit, then:
+git tag -a vYYYY.M.D -m "YYYY.M.D" && git push origin main --follow-tags
+```
+
+Write the month and day **unpadded**. `docker/metadata-action` parses the tag as
+semver to derive the image tag, and semver forbids leading zeros — `v2026.7.29`
+works, `v2026.07.29` fails silently and publishes no version tag at all.
+
+The version is read from `server/package.json` at runtime, so it does not need
+bumping anywhere else.
+
+Images are published to GHCR as `ghcr.io/nakenyon/pagermon-server` and
+`-client`: `:main` for every trunk build, `:YYYY.M.D` and `:latest` for releases,
+and `:sha-xxxxxxx` for any commit.
 
 ## Authors
 

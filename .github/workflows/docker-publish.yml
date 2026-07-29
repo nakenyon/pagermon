@@ -73,10 +73,19 @@ jobs:
           echo "changed files:"
           echo "$CHANGED" | sed 's/^/  /'
 
+          # Narrow to files that can actually affect each image. Both
+          # .dockerignore files exclude *.md, and server/.dockerignore also
+          # excludes test/, so changes to those never reach the build context
+          # and can only produce a byte-identical image. Without this a README
+          # edit under client/ triggers a full 3-platform QEMU rebuild for
+          # nothing.
+          SERVER_CHANGED="$(echo "$CHANGED" | grep -E '^server/' | grep -vE '\.md$|^server/test/' || true)"
+          CLIENT_CHANGED="$(echo "$CHANGED" | grep -E '^client/' | grep -vE '\.md$' || true)"
+
           server=false
           client=false
-          if echo "$CHANGED" | grep -q '^server/'; then server=true; fi
-          if echo "$CHANGED" | grep -q '^client/'; then client=true; fi
+          if [ -n "$SERVER_CHANGED" ]; then server=true; fi
+          if [ -n "$CLIENT_CHANGED" ]; then client=true; fi
 
           echo "server=$server" >> "$GITHUB_OUTPUT"
           echo "client=$client" >> "$GITHUB_OUTPUT"

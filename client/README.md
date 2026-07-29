@@ -1,33 +1,29 @@
 # PagerMon-Client
 
-Client component of the PagerMon server.
+Client component of the PagerMon server. It reads demodulated pager traffic from
+`rtl_fm` piped through `multimon-ng` and posts decoded messages to a PagerMon
+server.
 
-## Getting Started
+> **Most of this fork was written by an AI agent.** The containerization and the
+> environment-variable configuration described below were produced by Claude working
+> in this repository under human direction. Upstream
+> [PagerMon](https://github.com/pagermon/pagermon) is the work of its human authors.
+> See the [root README](../README.md#about-this-fork).
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+This fork runs the client in a container. There are no bare-metal instructions here
+— for the traditional `npm install` and hand-edited `reader.sh` setup, use
+[upstream](https://github.com/pagermon/pagermon).
 
-### Prerequisites
+### Behaviour worth knowing
 
-* [nodejs](https://nodejs.org/)
-* [rtl_fm](https://github.com/osmocom/rtl-sdr)
-* or [keenard's fork of rtl_fm](https://github.com/keenerd/rtl-sdr)
-* [multimon-ng](https://github.com/EliasOenal/multimon-ng)
-
-### Installing
-
-```
-cd client
-npm install
-cp config/default.json config/config.json
-```
-
-Edit config/config.json to suit your environment. Identifier should be a small string that will show up in the 'source' column of the messages display.
+Identifier should be a small string that will show up in the 'source' column of the messages display.
 
 Some environments send additional information via the "Function Code" in the pager message. Change `sendFunctionCode` to `true` to send this appended to the end of the address of each message. E.g. `POCSAG512: Address: 1000022  Function: 3  Alpha: test` would land on the server with an address of `10000223`.
 
 Some environments prepend pager messages with a timestamp - by default reader.js will trim these from the message and use them as the timestamp for the message. If you do not wish for this to happen, set `useTimestamp` to `false`. Only a limited type of timestamps are currently supported - if you wish to add a time format, submit an issue with some example messages.
 
-Check the samples dir for example usage.
+These live in `config.json` inside the container's `/data` volume; the three
+connection settings below are applied over it from the environment on every boot.
 
 ### Running in Docker
 
@@ -69,6 +65,15 @@ working example.
 | `MULTIMON_VERBOSITY`    | `-v` | Verbosity level, e.g. `1` for decode stats                      | unset          |
 | `MULTIMON_EXTRA_ARGS`   |      | Any extra raw `multimon-ng` flags, space-separated              | unset          |
 
+**Running several demodulators at once:** `MULTIMON_PROTOCOL` emits a single `-a`
+flag. If you don't know a system's baud rate, enable more through the raw-args
+escape hatch:
+
+```
+MULTIMON_PROTOCOL=POCSAG512
+MULTIMON_EXTRA_ARGS=-a POCSAG1200 -a POCSAG2400
+```
+
 If a signal is clearly present at the configured frequency (confirm with
 `rtl_power`) but nothing ever decodes, check in this order: frequency/protocol
 match the actual system, `RTL_GAIN`/`RTL_SQUELCH` aren't cutting off real
@@ -76,11 +81,11 @@ signal, then try `MULTIMON_INVERT=true`.
 
 ### Import.js
 
-The `import.js` script can be used to import capcode aliases from PDW filters.ini or a generic CSV file.
+The `import.js` script can be used to import capcode aliases from PDW filters.ini or a generic CSV file. Run it inside the client container:
 
-Usage: 
-    `cat filters.ini | node import.js --pdw`
-    `cat aliases.csv | node import.js`
+Usage:
+    `docker compose exec -T pagermon-client1 node import.js --pdw < filters.ini`
+    `docker compose exec -T pagermon-client1 node import.js < aliases.csv`
 
 CSV must have columns in any order of the following: 
     `id,address,alias,agency,color,icon,ignore,pluginconf`
@@ -95,15 +100,21 @@ Warringah - UNID,1370%,words,darkgreen,RFS,description or something that isnt im
 
 ## Contributing
 
-All are welcome to contribute.
+Contributors should submit a pull request against `main`. See the
+[root README](../README.md#contributing).
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/davidmckenzie/pagermon/tags). 
+This fork uses CalVer, tagged `vYYYY.M.D` — see the
+[tags on this repository](https://github.com/nakenyon/pagermon/tags) and the
+[root README](../README.md#versioning) for the release process.
 
 ## Authors
 
-See the list of [contributors](https://github.com/davidmckenzie/pagermon/contributors) who participated in this project.
+PagerMon was originally written by [Dave McKenzie](https://github.com/davidmckenzie)
+and built by upstream's
+[contributors](https://github.com/pagermon/pagermon/graphs/contributors). This fork
+adds containerization on top of their work.
 
 ## License
 
@@ -111,4 +122,5 @@ This project is licensed under The Unlicense - because fuck licenses. Do what yo
 
 ## Acknowledgments
 
-* multimon-ng
+* [multimon-ng](https://github.com/EliasOenal/multimon-ng)
+* [osmocom/rtl-sdr](https://github.com/osmocom/rtl-sdr)

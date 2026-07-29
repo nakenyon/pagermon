@@ -1,21 +1,67 @@
-# [PagerMon](https://hrng.io/)
-![Discord](https://img.shields.io/discord/533900375066017812.svg?style=plastic)
-![GitHub issues](https://img.shields.io/github/issues-raw/pagermon/pagermon.svg?style=plastic)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/pagermon/pagermon.svg?style=plastic)
-![GitHub](https://img.shields.io/github/license/pagermon/pagermon.svg?style=plastic)
-![GitHub stars](https://img.shields.io/github/stars/pagermon/pagermon.svg?style=plastic)
-![GitHub forks](https://img.shields.io/github/forks/pagermon/pagermon.svg?style=plastic)
-![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/pagermon/pagermon.svg?label=release&style=plastic)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/pagermon/pagermon.svg?style=plastic)
-![GitHub contributors](https://img.shields.io/github/contributors/pagermon/pagermon.svg?style=plastic)
+# PagerMon (dockerized fork)
+
+> **Most of this fork was written by an AI agent.** The containerization, CI
+> pipeline, added themes, announcement banner and recent bug fixes were produced by
+> Claude working in this repository under human direction. Upstream
+> [PagerMon](https://github.com/pagermon/pagermon) — the application itself — is the
+> work of its human authors. See [About this fork](#about-this-fork).
+
 ![Tests](https://img.shields.io/github/actions/workflow/status/nakenyon/pagermon/tests.yml?branch=main&label=Tests)
 ![Images](https://img.shields.io/github/actions/workflow/status/nakenyon/pagermon/docker-publish.yml?branch=main&label=Images)
+![License](https://img.shields.io/github/license/nakenyon/pagermon.svg?style=flat)
 
-PagerMon is an API driven client/server framework for parsing and displaying pager messages from multimon-ng.
+PagerMon is an API driven client/server framework for parsing and displaying pager
+messages from multimon-ng.
 
-It is built around POCSAG messages, but should easily support other message types as required.
+It is built around POCSAG messages, but should easily support other message types as
+required.
 
-The UI is built around a Node/Express/Angular/Bootstrap stack, while the client scripts are Node scripts that receive piped input.
+The UI is built around a Node/Express/Angular/Bootstrap stack, while the client
+scripts are Node scripts that receive piped input.
+
+This fork packages it to run entirely in containers. There are no bare-metal
+instructions here — if you want the traditional `npm install` / `pm2` setup, use
+[upstream](https://github.com/pagermon/pagermon).
+
+## About this fork
+
+Upstream PagerMon has not cut a release since 0.3.13 in September 2023. This fork
+exists to run it in Docker, and diverged far enough along the way to be worth
+describing honestly.
+
+**Produced by an AI agent**, under human review and direction:
+
+* Server and client Docker images, and the compose setup that runs them
+* The client image building `rtl_fm` from current osmocom/rtl-sdr sources rather
+  than Debian's packaged librtlsdr, which silently produces undemodulatable signal
+  on RTL-SDR Blog V3/V4 dongles
+* Driving the whole radio chain from environment variables instead of a hand-edited
+  shell script
+* CI: per-image path filtering, tag-driven releases, CalVer versioning
+* Two extra themes, and the announcement banner feature across all four
+* Reviving the server test suite (it had never been run in this fork) and fixing the
+  two real auth bugs it surfaced
+
+**Inherited from upstream**, unchanged in substance: the application itself — the
+message pipeline, API, database layer, plugin system, admin UI and the original
+themes. That is other people's work, and the large majority of the code here.
+
+If you are evaluating this fork, that distinction matters: the application is
+battle-tested software by human authors; the packaging around it is not, and has
+been exercised mainly by one deployment.
+
+### Credits
+
+* **[Dave McKenzie](https://github.com/davidmckenzie)** — original author of
+  PagerMon (initial commit, June 2017).
+* **The upstream [contributors](https://github.com/pagermon/pagermon/graphs/contributors)** —
+  Daniel Williams, eopo, Nathanial Marsh, DanrwAU, Maxwell Watermolen and others,
+  who built nearly everything this fork runs on.
+* **[bullseye555](https://github.com/bullseye555)** — responsive small-screen
+  handling in the default theme, which the Compact themes here build on.
+
+PagerMon is released into the public domain under the Unlicense, so none of this
+attribution is legally required. It is given because it should be.
 
 ## Features
 
@@ -30,8 +76,9 @@ The UI is built around a Node/Express/Angular/Bootstrap stack, while the client 
 * Native POCSAG / FLEX / EAS Client Support
 * Keyword highlighting
 * WebSockets support - messages are delivered to clients in near realtime
-* Pretty HTML5
 * Native browser notifications
+* Admin-editable announcement banner, shown on the login page and above the message
+  list, with info/warning/critical severities — intended for maintenance windows
 * Plugin Support - Current Plugins:
     * [Pushover](https://pushover.net/) near realtime muti-device notification service
     * [Prowl](https://prowlapp.com) near realtime iOS notification service with Apple Watch support
@@ -41,19 +88,24 @@ The UI is built around a Node/Express/Angular/Bootstrap stack, while the client 
     * [Twitter](https://www.twitter.com/)
     * [Microsoft Teams](https://products.office.com/en-us/microsoft-teams/group-chat-software) Team colaboration platform
     * [Slack](https://slack.com/) Team colabortation platform
-    * SMTP Email Support for conventional SMTP email notifications 
+    * SMTP Email Support for conventional SMTP email notifications
     * Regex Filters - Filter incoming messages via regex
     * Regex Replace - Modify incoming messages via regex
     * Message Repeat - Repeat incoming messages to another pagermon server
-* May or may not contain cute puppies
 
-### Planned Features
+### Themes
 
-* Horizontal scaling
-* Enhanced message filtering
-* Bootstrap 4 + Angular 2 support
-* Enhanced alias control
-* Graphing
+Four themes ship in the image, selectable under `/admin/settings`:
+
+| Theme | |
+|---|---|
+| `default` | upstream's original light theme |
+| `Dark` | dark treatment of the default layout |
+| `Compact Dark` | denser layout, dark |
+| `Compact Default` | denser layout, light |
+
+Each theme carries its own copy of `views/global/` and the admin templates, so a
+feature added to one has to be added to all four.
 
 ### Screenshots
 
@@ -63,62 +115,48 @@ The UI is built around a Node/Express/Angular/Bootstrap stack, while the client 
 
 ![alias edit](http://i.imgur.com/gus8QTe.jpeg)
 
-## Getting Started
+## Running it
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+### Using the prebuilt images
 
-### Prerequisites
-
-* [nodejs](https://nodejs.org/) 12.x or higher
-* sqlite3
-* Probably some other stuff
-
-#### Recommended
-
-* [nvm](https://github.com/creationix/nvm#installation)
-* nginx or some kind of reverse proxy for SSL offloading
-
-## Running the server
-
-### Local setup
-
-1) Copy server/process-default.json to server/process.json and modify according to your environment
-2) Launch the app from the Terminal:
+Multi-arch images are published to GHCR on every build:
 
 ```
-    $ sudo apt-get install npm sqlite3
-    $ npm install npm@latest -g
-    $ npm install pm2 -g
-    $ cd server
-    $ npm install
-    $ export NODE_ENV=production
-    $ pm2 start process.json
+ghcr.io/nakenyon/pagermon-server
+ghcr.io/nakenyon/pagermon-client
 ```
-3) To start on boot, let pm2 handle it:
-```
-    $ sudo pm2 startup
-    $ pm2 save
-```
-4) You probably want to rotate logs, too:
-```
-    $ pm2 install pm2-logrotate
-    $ sudo pm2 logrotate -u user
-```
-5) Now login via the website, default port is 3000, default credentials are 'admin' / 'changeme'
-6) Head to /admin, change your password, and generate some API keys
-6) Grab your API keys and drop them in the PagerMon client, then you're good to go!
 
-Alternatively a production ready setup guide is available here
-https://github.com/pagermon/pagermon/wiki/Tutorial---Production-Ready-Ubuntu,-PM2,-Nginx-Reverse-Proxy,-Let's-Encrypt-SSL,-Pagermon-server
+Tags: `:YYYY.M.D` and `:latest` for releases, `:main` for every trunk build, and
+`:sha-xxxxxxx` for any individual commit. **Pin to a release tag** for anything you
+care about — `:main` moves whenever trunk does.
 
-### Docker
+A minimal server-only compose file:
 
-This fork ships a `docker-compose.yml` that runs the server and client as
-separate containers, each with their own image (`server/Dockerfile` and
-`client/Dockerfile`). Prebuilt multi-arch images are also published to
-GHCR on every push - see `.github/workflows/docker-publish.yml`.
+```yaml
+services:
+  pagermon-server:
+    image: ghcr.io/nakenyon/pagermon-server:latest
+    container_name: pagermon-server
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/server:/data
+    environment:
+      - NODE_ENV=production
+      - TZ=America/Chicago
+    restart: unless-stopped
+```
 
-#### Quick start
+The server keeps its config and sqlite database in `/data`. On first boot it seeds
+`config.json` from defaults, and on every boot it repoints `database.file` at
+`/data/messages.db` so a config copied in from elsewhere can't silently send it to
+the wrong database.
+
+### Building from source
+
+The repo's `docker-compose.yml` builds both images and wires up two full
+server+client pairs, as a template for running multiple RTL-SDR dongles against
+separate instances on one host:
 
 ``` bash
 cp .env.example .env
@@ -127,20 +165,17 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-This starts two full server+client pairs (`pagermon-server1`/`pagermon-client1`
-and `pagermon-server2`/`pagermon-client2`) as a template for running multiple
-RTL-SDR dongles/frequencies against separate PagerMon instances on one host.
-Delete the second pair if you only need one instance, or copy the block again
-for a third.
+Delete the second pair if you only need one instance, or copy the block again for a
+third.
 
 - Server data (config, sqlite db) persists in `./data/server<N>`.
-- The client needs the RTL-SDR USB dongle passed through via `devices:` -
-  see `client/README.md` for all of the `RTL_*`/`MULTIMON_*` environment
-  variables and what `rtl_fm`/`multimon-ng` flags they map to.
-- After the server is up, log in at `http://localhost:<port>` (default
-  `admin` / `changeme`), change the password, and generate an API key under
-  `/admin/settings` - that's the value that goes in `.env` as `API_KEY1`
-  (must match what the corresponding client sends as `PAGERMON_API_KEY`).
+- The client needs the RTL-SDR USB dongle passed through via `devices:` — see
+  [client/README.md](client/README.md) for every `RTL_*`/`MULTIMON_*` environment
+  variable and the `rtl_fm`/`multimon-ng` flag it maps to.
+- After the server is up, log in at `http://localhost:<port>` (default `admin` /
+  `changeme`), change the password, and generate an API key under `/admin/settings`
+  — that's the value that goes in `.env` as `API_KEY1` (it must match what the
+  corresponding client sends as `PAGERMON_API_KEY`).
 
 ``` bash
 # Rebuild after pulling changes
@@ -156,7 +191,17 @@ docker compose down
 **Tip:** you probably want to set up Docker log rotation - see
 [here](https://success.docker.com/article/how-to-setup-log-rotation-post-installation).
 
-#### Migrating an existing bare-metal install
+### Multiple dongles on one host
+
+Each client container needs its own dongle — an RTL-SDR can only be opened by one
+process at a time, so two containers pointed at the same `RTL_DEVICE` will leave the
+second crash-looping on `usb_claim_interface error -6`.
+
+Dongle indices are assigned by USB enumeration order and can shuffle across reboots.
+If your dongles are interchangeable that doesn't matter. If it does, give each one a
+unique serial with `rtl_eeprom -s` and use that as `RTL_DEVICE` instead of an index.
+
+### Migrating an existing bare-metal install
 
 To move an existing (non-Docker) server over instead of starting fresh:
 
@@ -171,120 +216,6 @@ every boot (regardless of what it was set to in the file you copied in),
 so your existing sqlite database is what gets used - nothing gets
 silently reset to a fresh one. Everything else in `config.json` (users,
 API keys, session secret, plugin settings) carries over as-is.
-
-## Running the client
-
-### Local setup
-
-
-#### Prerequisites
-These programs/libraries are required for Pagermon Client to work
-
-* [RTL-SDR](https://www.rtl-sdr.com/rtl-sdr-quick-start-guide/) - RTL-SDR tools/libraries to access RTL-SDR dongle
-* [RTL-SDR dongle](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles/)  - You can get these from Ebay, Amazon or other stores (Has to have RTL2832U chip)
-* [nodejs](https://nodejs.org/en/) - JavaScript Programming Language (Only if installing separate from server)
-* [npm](https://www.npmjs.com/) - Javascript Package Manager (Only if installing separate from server)
-* [Git Client](https://git-scm.com/) - Github.com client for getting source code (Only if installing separate from server) 
-
-To install the Prerequisites run
-`sudo apt install nodejs npm git rtl-sdr`
-
-#### Installing Pagermon Client
-Run the following commands from Terminal:
-```
-git clone https://github.com/pagermon/pagermon.git
-cd pagermon/client
-npm install
-```
-edit `reader.sh` and edit frequency and rtl_device number, Edit Multimon-ng command
-```Bash
-rtl_fm -d 0 -E dc -F 0 -A fast -f 148.5875M -s22050 - |
-multimon-ng -q -b1 -c -a POCSAG512 -f alpha -t raw /dev/stdin |
-node reader.js
-```
-`-d 0` - change this to your rtl_device number using rtl_test
-
-`-f 148.5875M` - change this to the frequency you are decoding
-
-#### Multimon-ng Command examples
-##### POCSAG
-> multimon-ng -q -b1 -c -a POCSAG512 -f alpha -t raw /dev/stdin
-
-##### FLEX
->  multimon-ng -a FLEX -t raw /dev/stdin
-
-##### EAS
-> multimon-ng -a EAS -t raw /dev/stdin
-
-
-#### Configuring Pagermon Client
-Before running Pagermon Client you have to configure it to send the decoded info to the pagermon server.
-
-copy default.json to config.json 
-```
-cp config/default.json config/config.json 
-```
-
-Edit config.json with your favorite editor
-```
-{
-  "apikey": "changeme",
-  "hostname": "http://127.0.0.1:3000",
-  "identifier": "TEST",
-  "sendFunctionCode": false,
-  "useTimestamp": true,
-  "EAS": {
-    "excludeEvents": [],
-    "includeFIPS": [],
-    "addressAddType": true
-  }
-}
-
-```
-
-#### Pager Options
-
-**apikey:**  This is the API key generate on the Pagermon Server http://serverip/admin/settings
-
-**hostname:** The host name or IP of the Pagermon server (If you run Pagermon Server and Client on same PC then you can put this as `http://127.0.0.1:3000`
-
-**identifier:** This will show up in the source column on the server web page good for when you have multiple sources and want to know which one the pager message is coming from
-
-**sendFunctionCode:** This will appand the function code to the address of the message **true** or **false**
-
-**useTimestamp:** This will use the time in the message **true** or **false**
-
-#### EAS Options
-**excludeEvents:** Allows a list of [Events](https://github.com/MaxwellDPS/jsame#event-codes) to exclude ie `["RWT","RMT","SVA"]`
-
-**includeFIPS:** Allows you to filter on a list of FIPS to alert on ie `["031109", "031000"]`
-
-**addressAddType:** Will append the event code to the address so `KOAX-WXR` would become KOAX-WXR-W for `ZCZC-WXR-TOR-031109+0015-3650000-KOAX/NWS -` **true** or **false**
-
-
-## PagermonPi - Raspberry Pi Image
-Check out our Raspberry Pi Image for Pi3 & Pi4 which has Pagermon pre-loaded on it.
-
-Check out the following links:
-
-[Releases](https://github.com/pagermon/pagermon/releases) for the latest version
-[Wiki](https://github.com/pagermon/pagermon/wiki/PagermonPi-Image-For-Raspberry-Pi) for PagermonPi support
-
-## Support
-
-General PagerMon support can be requested in the #support channel of the PagerMon discord server.
-
-[Click Here](https://discord.gg/3VK7gSD) to join
-
-Bugs and Feature requests can be logged via the GitHub issues page. 
-
-## Contributing
-
-All are welcome to contribute. Contributors should submit a pull request with the requested changes.
-
-CHANGELOG.md is to be updated on each pull request.
-
-If a database schema change is required, this must be done using KnexJS Migration files. **Insert Instructions for this here**
 
 ## Branches
 
@@ -319,13 +250,34 @@ works, `v2026.07.29` fails silently and publishes no version tag at all.
 The version is read from `server/package.json` at runtime, so it does not need
 bumping anywhere else.
 
-Images are published to GHCR as `ghcr.io/nakenyon/pagermon-server` and
-`-client`: `:main` for every trunk build, `:YYYY.M.D` and `:latest` for releases,
-and `:sha-xxxxxxx` for any commit.
+## Support
 
-## Authors
+Bugs and feature requests for **this fork** can be logged via its
+[GitHub issues](https://github.com/nakenyon/pagermon/issues).
 
-See the list of [contributors](https://github.com/pagermon/pagermon/contributors) who participated in this project.
+Please don't take questions about this fork to upstream's community — the
+containerization, CI and themes here are not theirs, and they can't support them.
+For questions about PagerMon itself, upstream is the right place.
+
+## Contributing
+
+Contributors should submit a pull request against `main`. `CHANGELOG.md` is to be
+updated on each pull request.
+
+If a database schema change is required, this must be done using KnexJS Migration
+files.
+
+The server test suite runs on Node 18 and is expected to stay green. You don't need
+Node installed — run it in the same base image the server is built from:
+
+``` bash
+docker run --rm -v "$PWD/server:/app" -w /app node:18-bookworm-slim \
+  sh -c 'npm ci && npm run test-text'
+```
+
+The tests use their own sqlite database at `server/test/messages.db`. If a run is
+interrupted it can leave the knex migration lock set, which shows up as
+`Migration table is already locked` on the next run — delete that file to clear it.
 
 ## License
 
@@ -335,3 +287,4 @@ This project is licensed under The Unlicense - because fuck licenses. Do what yo
 
 * [multimon-ng](https://github.com/EliasOenal/multimon-ng)
 * [jSAME](https://github.com/MaxwellDPS/jsame)
+* [osmocom/rtl-sdr](https://github.com/osmocom/rtl-sdr)

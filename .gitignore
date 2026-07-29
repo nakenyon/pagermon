@@ -86,6 +86,9 @@ client/config/backup.json
 
 #idea
 .idea
+
+#vscode
+.vscode/
 server/sessions
 
 #coverage
@@ -98,3 +101,6 @@ client/config/skook-config.json
 server/capcodes.sql
 server/protection.sql
 server/users.sql
+
+# local working notes, not part of the project
+HANDOFF.md

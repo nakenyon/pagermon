@@ -133,9 +133,13 @@ care about — `:main` moves whenever trunk does.
 `linux/arm/v7`, so server and client can each run on x86 or on a Raspberry Pi, in
 any combination. Docker picks the right variant automatically.
 
-Note that the arm legs are emulated cross-compiles: the server compiles `sqlite3`
-from source (musl ships no prebuilt binaries for it) and the client compiles
-`rtl-sdr`, which is why a full server build takes around 20 minutes.
+The arm legs are built under QEMU emulation, which is slow — a cold server build
+takes ~22 minutes, almost all of it spent emulating `npm ci` across ~1165 packages
+rather than compiling anything. (`sqlite3` ships prebuilt binaries for musl on both
+x64 and arm64; only 32-bit arm has to compile it, and that leg is not even the
+slowest.) Build layers are cached in the registry as a `:buildcache` tag on each
+image, so builds that don't change `package.json` reuse that work — a rebuild with
+no dependency change drops from ~22 minutes to well under one.
 
 A minimal server-only compose file:
 

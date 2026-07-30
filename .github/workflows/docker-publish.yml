@@ -109,6 +109,14 @@ jobs:
       - name: Check out repo
         uses: actions/checkout@v4
 
+      # Required for the arm64/armv7 cross-builds below - without these the
+      # build silently produces an amd64-only image.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -132,6 +140,11 @@ jobs:
         with:
           context: ./server
           file: ./server/Dockerfile
+          # Match the client's platform set so a Raspberry Pi can run both
+          # halves. The server compiles sqlite3 from source (musl has no
+          # prebuilt binaries for it), so the arm legs are emulated compiles
+          # and account for most of this job's run time.
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

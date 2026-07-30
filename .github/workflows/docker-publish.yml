@@ -141,13 +141,24 @@ jobs:
           context: ./server
           file: ./server/Dockerfile
           # Match the client's platform set so a Raspberry Pi can run both
-          # halves. The server compiles sqlite3 from source (musl has no
-          # prebuilt binaries for it), so the arm legs are emulated compiles
-          # and account for most of this job's run time.
+          # halves.
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # The arm legs take ~20 minutes each, and measurement showed that is
+          # QEMU overhead on `npm ci` across ~1165 packages rather than native
+          # compilation: arm64 (1305s) was slower than arm/v7 (1199s) even
+          # though arm64 gets a prebuilt sqlite3 binary and arm/v7 has to build
+          # it. Caching the builder layer skips that entirely for any commit
+          # that doesn't touch package.json or package-lock.json, which is
+          # nearly all of them.
+          #
+          # Registry rather than type=gha: the Actions cache is capped at 10GB
+          # per repo with LRU eviction, and three architectures of node_modules
+          # would push against it, degrading to silent full rebuilds.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:buildcache,mode=max
 
   build-client:
     name: Build and push client image
@@ -198,3 +209,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Same reasoning as the server job - this one compiles rtl-sdr from
+          # source for three architectures.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-client:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-client:buildcache,mode=max

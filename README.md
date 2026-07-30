@@ -118,7 +118,7 @@ feature added to one has to be added to all four.
 
 ### Using the prebuilt images
 
-Multi-arch images are published to GHCR on every build:
+Images are published to GHCR on every build:
 
 ```
 ghcr.io/nakenyon/pagermon-server
@@ -128,6 +128,14 @@ ghcr.io/nakenyon/pagermon-client
 Tags: `:YYYY.M.D` and `:latest` for releases, `:main` for every trunk build, and
 `:sha-xxxxxxx` for any individual commit. **Pin to a release tag** for anything you
 care about — `:main` moves whenever trunk does.
+
+**Architectures** — both images build for `linux/amd64`, `linux/arm64` and
+`linux/arm/v7`, so server and client can each run on x86 or on a Raspberry Pi, in
+any combination. Docker picks the right variant automatically.
+
+Note that the arm legs are emulated cross-compiles: the server compiles `sqlite3`
+from source (musl ships no prebuilt binaries for it) and the client compiles
+`rtl-sdr`, which is why a full server build takes around 20 minutes.
 
 A minimal server-only compose file:
 

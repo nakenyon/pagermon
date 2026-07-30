@@ -1,3 +1,29 @@
+# 2026.7.30
+
+Makes the ARM support usable from a release tag. 2026.7.29 published an
+amd64-only server image, so the Raspberry Pi support existed only on `:main`.
+
+* Server images now build for `linux/arm64` and `linux/arm/v7` alongside
+  `linux/amd64`, matching the client. Both halves of the stack can now run on a
+  Pi, on x86, or in any combination — previously only the client could.
+* Fix: the `sqlite3` native build failed on Python 3.12 with
+  `ModuleNotFoundError: No module named 'distutils'` (removed by PEP 632, still
+  imported by the node-gyp bundled with Node 18). `py3-setuptools` vendors it
+  back. This surfaced on `linux/arm/v7`, whose base image already ships Python
+  3.12, but would have broken amd64 builds too as soon as `node:18-alpine`
+  rebased.
+* CI: image build layers are cached in the registry as a `:buildcache` tag.
+  Measurement showed the ~22 minute arm build was QEMU overhead on `npm ci`
+  across ~1165 packages rather than compilation — arm64 was slower than arm/v7
+  despite getting a prebuilt `sqlite3` — so caching the builder layer is what
+  helps. Rebuilds with no dependency change drop to well under a minute.
+* CI: builds no longer trigger for changes the Docker build context can't see
+  (markdown, `server/test/`), which were producing byte-identical images.
+* Docs: both READMEs rewritten around the containerized workflow, with
+  attribution to upstream and its contributors.
+
+No runtime code changed in this release.
+
 # 2026.7.29
 
 First release of the `nakenyon` fork. Versioning switches to CalVer

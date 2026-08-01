@@ -72,6 +72,8 @@ attribution is legally required. It is given because it should be.
 * Pagination and searching
 * Filtering by capcode or agency
 * Duplicate message filtering
+* Optional message rotation — delete messages older than a configurable
+  retention window (off by default; enable under admin settings)
 * Native POCSAG / FLEX / EAS Client Support
 * Keyword highlighting
 * WebSockets support - messages are delivered to clients in near realtime
@@ -227,6 +229,12 @@ every boot (regardless of what it was set to in the file you copied in),
 so your existing sqlite database is what gets used - nothing gets
 silently reset to a fresh one. Everything else in `config.json` (users,
 API keys, session secret, plugin settings) carries over as-is.
+
+One deliberate exception: `rotationEnabled` is reset to `false` on the first
+boot (with a log line). Upstream configs have claimed rotation was enabled
+since 2017 while the feature was unimplemented, so the flag can't be taken at
+its word - your message history is never purged unless you re-enable rotation
+yourself in admin settings.
 
 ## Branches
 

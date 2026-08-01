@@ -24,7 +24,8 @@
     "duplicateFiltering": true,
     "duplicateLimit": 10,
     "duplicateTime": 60,
-    "rotationEnabled": true,
+    "rotationEnabled": false,
+    "rotationReset2026": true,
     "rotateDays": 7,
     "rotateKeep": 4,
     "replaceText": [

@@ -208,7 +208,6 @@
               <span id="helpBlock" class="help-block"><strong>Advanced Users</strong> - The cron timing for Automatic Alias Refresh. See <a href="https://www.npmjs.com/package/node-cron#cron-syntax" target="_blank">Cron Syntax</a>.<br />Default = "0 5,35 * * * *" (The 5th and 35th minute of every hour)</span>
               </div>
             </div> 
-            <fieldset disabled>
             <div class="form-group">
               <div class="col-xs-8 col-xs-offset-2 col-sm-9 col-sm-offset-3">
                 <div class="checkbox">
@@ -219,21 +218,19 @@
               </div>
             </div>
             <div class="form-group">
-              <label for="messages.rotateDays" class="col-xs-4 col-sm-3 control-label">Rotation interval</label>
+              <label for="messages.rotateDays" class="col-xs-4 col-sm-3 control-label">Rotation interval (days)</label>
               <div class="col-xs-8 col-sm-9">
-              <input type="number" class="form-control" name="messages.rotateDays" ng-model="settings.messages.rotateDays" ng-disabled="!settings.messages.rotationEnabled">
-              <span id="helpBlock" class="help-block">Rotate the messages database every {{settings.messages.rotateDays}} days.</span>
+              <input type="number" min="1" class="form-control" name="messages.rotateDays" ng-model="settings.messages.rotateDays" ng-disabled="!settings.messages.rotationEnabled">
+              <span id="helpBlock" class="help-block">Length of one rotation interval, in days.</span>
               </div>
             </div>
             <div class="form-group">
-              <label for="messages.rotateKeep" class="col-xs-4 col-sm-3 control-label">Rotation retention</label>
+              <label for="messages.rotateKeep" class="col-xs-4 col-sm-3 control-label">Intervals to keep</label>
               <div class="col-xs-8 col-sm-9">
-              <input type="number" class="form-control" name="messages.rotateKeep" ng-model="settings.messages.rotateKeep" ng-disabled="!settings.messages.rotationEnabled">
-              <span id="helpBlock" class="help-block">Keep {{settings.messages.rotateKeep}} rotated database files.</span>
-              <span class="text-warning">Message rotation is not yet implemented</span>
+              <input type="number" min="1" class="form-control" name="messages.rotateKeep" ng-model="settings.messages.rotateKeep" ng-disabled="!settings.messages.rotationEnabled">
+              <span id="helpBlock" class="help-block">Messages older than {{settings.messages.rotateDays * settings.messages.rotateKeep}} days are deleted (checked hourly). Note: deleting does not shrink a sqlite file - freed space is reused for new messages.</span>
               </div>
             </div>
-            </fieldset>
 
             <h5 >Messages</h5>
             <div class="form-group">

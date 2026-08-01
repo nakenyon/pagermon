@@ -14,7 +14,12 @@
 %>
 <% if (_bannerOn) { %>
   <div class="container-fluid announcement-banner">
-    <div class="alert <%= _bannerClass %>" role="alert">
+    <!-- Inline styles rather than per-theme stylesheet edits: this file is
+         duplicated across all four themes and none of their style.css files
+         know about .announcement-banner. Centered + bumped size for
+         at-a-glance readability. -->
+    <div class="alert <%= _bannerClass %>" role="alert"
+         style="text-align: center; font-size: 1.25em; margin-bottom: 10px;">
       <i class="fa <%= _bannerIcon %>"></i>
       <%- bannerContent %>
     </div>

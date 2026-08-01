@@ -270,6 +270,14 @@ if (dbtype == 'mysql') {
   }, null, true);
 }
 
+// Message rotation: hourly retention purge, gated on messages:rotationEnabled.
+// Config is read at tick time inside the job, so enabling/disabling in the
+// admin settings UI takes effect without a restart. Skipped entirely under
+// test - the suite drives cron/messageRotation.js directly.
+if (process.env.NODE_ENV !== 'test') {
+  require('./cron/messageRotation').schedule(db, nconf);
+}
+
 //Disable all logging for tests
 if(process.env.NODE_ENV === 'test') { 
   logger.main.silent = true

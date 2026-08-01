@@ -9,6 +9,22 @@ nconf.load();
 
 // initialize the database if it does not already exist
 function init() {
+    // One-time neutralization of the stale rotation flag. Upstream shipped
+    // rotationEnabled: true in its defaults since 2017 while the feature was
+    // unimplemented, so any config written before rotation actually existed
+    // says "enabled" without the admin ever choosing it - including databases
+    // and configs imported from upstream installs. Honoring that stale flag
+    // would purge history on first boot. Reset it once, then respect whatever
+    // the admin sets in the settings UI from here on.
+    if (!nconf.get('messages:rotationReset2026')) {
+        if (nconf.get('messages:rotationEnabled')) {
+            logger.main.info('Rotation: disabling stale rotationEnabled flag - message rotation did not exist when this config was written. Re-enable it in admin settings to opt in.');
+            nconf.set('messages:rotationEnabled', false);
+        }
+        nconf.set('messages:rotationReset2026', true);
+        nconf.save();
+    }
+
     var dbtype = nconf.get('database:type')
     //This is here for compatibility with old versions. Will set the DB type then exit. 
     if (dbtype == null || dbtype == 'sqlite') {

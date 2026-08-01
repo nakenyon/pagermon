@@ -1,3 +1,21 @@
+# 2026.8.1
+
+* Message rotation is now actually implemented. Upstream shipped the config
+  keys and admin UI in 2017 with a "not yet implemented" warning; the keys were
+  never consumed by any code. Semantics are a continuously-enforced retention
+  horizon: messages older than `rotateDays × rotateKeep` days (default 7 × 4 =
+  28) are deleted by an hourly job. Enable it under Settings → Messages.
+* **Upgrade/BYO-database safety**: because `rotationEnabled: true` was
+  upstream's shipped default while the feature was unimplemented, any existing
+  config claims rotation is on without the admin ever choosing it. On first
+  boot after upgrading, the flag is reset to `false` once (logged), and must be
+  deliberately re-enabled in admin settings. Imported upstream databases are
+  never purged without that opt-in.
+* Announcement banner: text is now centered with a larger font for readability.
+* Settings UI: rotation fields un-disabled, labels/help text updated to the
+  real semantics; note that deleting rows does not shrink a sqlite file (freed
+  space is reused).
+
 # 2026.7.30
 
 Makes the ARM support usable from a release tag. 2026.7.29 published an

@@ -45,6 +45,10 @@ services:
       - PAGERMON_SERVER=http://pagermon-server1:3000
       - PAGERMON_API_KEY=${API_KEY1:-changeme}    # must match a key in server1's config.json
       - PAGERMON_IDENTIFIER=${CLIENT1_IDENTIFIER:-CLIENT1}
+      # Not cosmetic: reader.js parses timestamps embedded in pager messages
+      # with moment() in local time before converting to an epoch, so an unset
+      # TZ (i.e. UTC) shifts those messages by your UTC offset.
+      - TZ=${TZ:-America/Chicago}
       # -- rtl_fm --
       - RTL_FREQ=${RTL_FREQ1:-453.600M}     # -f  frequency to tune to
       - RTL_DEVICE=${RTL_DEVICE1:-0}        # -d  dongle index (0, 1, ...) or serial string
@@ -104,6 +108,7 @@ services:
       - PAGERMON_SERVER=http://pagermon-server2:3000
       - PAGERMON_API_KEY=${API_KEY2:-changeme}
       - PAGERMON_IDENTIFIER=${CLIENT2_IDENTIFIER:-CLIENT2}
+      - TZ=${TZ:-America/Chicago}
       # -- rtl_fm --
       - RTL_FREQ=${RTL_FREQ2:-462.950M}     # -f  frequency to tune to (different frequency for instance 2)
       - RTL_DEVICE=${RTL_DEVICE2:-1}        # -d  dongle index (0, 1, ...) or serial string (second dongle)

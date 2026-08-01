@@ -41,6 +41,19 @@ working example.
 | `PAGERMON_API_KEY`     | `config.apikey`     | -         |
 | `PAGERMON_IDENTIFIER`  | `config.identifier` | -         |
 
+**Timezone**
+
+| Variable | Meaning | Default |
+|----------|---------|---------|
+| `TZ`     | Container timezone, e.g. `America/Chicago` | UTC |
+
+Set this to the timezone your pager network transmits in. It is not cosmetic:
+when `useTimestamp` is enabled (the default), `reader.js` parses a timestamp
+embedded in the pager message with `moment()` — which interprets it in *local*
+time — before converting to an epoch. With `TZ` unset the container runs as UTC,
+so those messages are stored shifted by your UTC offset. Messages without an
+embedded timestamp are unaffected, since they are stamped on arrival.
+
 **rtl_fm**
 
 | Variable            | Flag | Meaning                                      | Default        |

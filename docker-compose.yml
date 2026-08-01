@@ -9,8 +9,7 @@ services:
 
   # ── Instance 1 ──────────────────────────────────────────────────────────
   pagermon-server1:
-    build: ./server
-    image: pagermon-server
+    image: ghcr.io/nakenyon/pagermon-server:latest
     container_name: pagermon-server1
     ports:
       - "${SERVER1_PORT:-3001}:3000"
@@ -18,7 +17,7 @@ services:
       - ./data/server1:/data
     environment:
       - NODE_ENV=production
-      - TZ=${TZ:-America/Chicago}
+      - TZ=${TZ:-America/New_York}
       # Docker sets HOSTNAME to the container ID by default, not a real
       # domain - set HOSTNAME1 in .env (see .env.example for details).
       - HOSTNAME=${HOSTNAME1:-}
@@ -34,21 +33,20 @@ services:
       start_period: 20s
 
   pagermon-client1:
-    build: ./client
-    image: pagermon-client
+    image: ghcr.io/nakenyon/pagermon-client:latest
     container_name: pagermon-client1
     devices:
       - /dev/bus/usb:/dev/bus/usb   # pass through entire USB bus for RTL-SDR access
     volumes:
       - ./data/client1:/data
     environment:
-      - PAGERMON_SERVER=http://pagermon-server1:3000
+      - PAGERMON_SERVER=${PAGERMON_SERVER1:-http://pagermon-server1:3000}
       - PAGERMON_API_KEY=${API_KEY1:-changeme}    # must match a key in server1's config.json
       - PAGERMON_IDENTIFIER=${CLIENT1_IDENTIFIER:-CLIENT1}
       # Not cosmetic: reader.js parses timestamps embedded in pager messages
       # with moment() in local time before converting to an epoch, so an unset
       # TZ (i.e. UTC) shifts those messages by your UTC offset.
-      - TZ=${TZ:-America/Chicago}
+      - TZ=${TZ:-America/New_York}
       # -- rtl_fm --
       - RTL_FREQ=${RTL_FREQ1:-453.600M}     # -f  frequency to tune to
       - RTL_DEVICE=${RTL_DEVICE1:-0}        # -d  dongle index (0, 1, ...) or serial string
@@ -75,7 +73,7 @@ services:
   # ── Instance 2 ──────────────────────────────────────────────────────────
   pagermon-server2:
     build: ./server
-    image: pagermon-server
+    image: ghcr.io/nakenyon/pagermon-server:latest
     container_name: pagermon-server2
     ports:
       - "${SERVER2_PORT:-3002}:3000"
@@ -83,7 +81,7 @@ services:
       - ./data/server2:/data
     environment:
       - NODE_ENV=production
-      - TZ=${TZ:-America/Chicago}
+      - TZ=${TZ:-America/New_York}
       - HOSTNAME=${HOSTNAME2:-}
       - USE_COOKIE_HOST=${USE_COOKIE_HOST2:-}
     restart: unless-stopped
@@ -97,18 +95,17 @@ services:
       start_period: 20s
 
   pagermon-client2:
-    build: ./client
-    image: pagermon-client
+    image: ghcr.io/nakenyon/pagermon-client:latest
     container_name: pagermon-client2
     devices:
       - /dev/bus/usb:/dev/bus/usb
     volumes:
       - ./data/client2:/data
     environment:
-      - PAGERMON_SERVER=http://pagermon-server2:3000
+      - PAGERMON_SERVER=${PAGERMON_SERVER2:-http://pagermon-server2:3000}
       - PAGERMON_API_KEY=${API_KEY2:-changeme}
       - PAGERMON_IDENTIFIER=${CLIENT2_IDENTIFIER:-CLIENT2}
-      - TZ=${TZ:-America/Chicago}
+      - TZ=${TZ:-America/New_York}
       # -- rtl_fm --
       - RTL_FREQ=${RTL_FREQ2:-462.950M}     # -f  frequency to tune to (different frequency for instance 2)
       - RTL_DEVICE=${RTL_DEVICE2:-1}        # -d  dongle index (0, 1, ...) or serial string (second dongle)

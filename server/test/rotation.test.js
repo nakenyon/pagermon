@@ -4,6 +4,13 @@ const chai = require('chai');
 
 const should = chai.should();
 
+// Require the app before knex: on a fresh checkout (CI) config/config.json
+// does not exist yet, and knexfile.js needs it to resolve the database client.
+// app.js creates the config from defaults on load. Mocha loads this file
+// before the routes.* files (alphabetical), so it cannot rely on them having
+// done it.
+require('../app');
+
 const db = require('../knex/knex.js');
 const rotation = require('../cron/messageRotation');
 

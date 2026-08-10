@@ -1,4 +1,4 @@
-# Unreleased
+# 2026.8.10
 
 **Self-service password reset.** Users can recover their own account from an
 emailed link instead of asking an admin to set a password by hand. Off by

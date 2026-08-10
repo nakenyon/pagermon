@@ -171,7 +171,7 @@ router.route('/login')
                                                                 error: 'An error occured',
                                                         });
                                                         logger.auth.debug(
-                                                                `Failed login ${JSON.stringify(user)} ${err}`
+                                                                `Failed login ${user.username} ${err}`
                                                         );
                                                 } else {
                                                         // Record the password generation this session
@@ -211,17 +211,18 @@ router.route('/login')
                                                                                         redirect: '/admin',
                                                                                 });
                                                                         }
+                                                                        // Username only. This used to serialise the
+                                                                        // whole row, which wrote the user's bcrypt
+                                                                        // hash into the auth log on every login.
                                                                         logger.auth.debug(
-                                                                                `Successful login ${JSON.stringify(
-                                                                                        user
-                                                                                )}`
+                                                                                `Successful login ${user.username}`
                                                                         );
                                                                 })
                                                                 .catch(err => {
                                                                         logger.db.error(err);
                                                                 });
                                                 }
-                                        });
+                                                });
                                         });
                                 } else {
                                         res.status(401).send({ status: 'failed', error: 'User Disabled' });

@@ -67,6 +67,8 @@ attribution is legally required. It is given because it should be.
 * Capcode aliasing with colors and [FontAwesome](https://fontawesome.io/icons/) icons
 * API driven extensible architecture
 * Multi-user support
+* Self-service password reset by email — users recover their own account instead
+  of asking an admin (off by default; see [Password reset](#password-reset))
 * SQLite or MySQL database backing
 * Configurable via UI
 * Pagination and searching
@@ -235,6 +237,80 @@ boot (with a log line). Upstream configs have claimed rotation was enabled
 since 2017 while the feature was unimplemented, so the flag can't be taken at
 its word - your message history is never purged unless you re-enable rotation
 yourself in admin settings.
+
+## Password reset
+
+Users can reset their own password from a link emailed to the address on their
+account, so growing the userbase does not mean the admin setting passwords by
+hand. It is **off by default** and needs two things configured first.
+
+### Setup
+
+1. **Admin → Settings → Global → Site URL.** The external address people reach
+   this server on, including the scheme (`https://pager.example.com`). Reset
+   links are built from it, so the feature stays off until it is set. It can
+   also come from the `PAGERMON_URL` environment variable, which wins over the
+   setting.
+
+   This is deliberately *not* derived from the incoming request. A forged `Host`
+   header would otherwise put an attacker's address into an otherwise genuine
+   reset email.
+
+2. **Admin → Settings → Email.** Your own mail server or relay:
+
+   | Field | Notes |
+   | --- | --- |
+   | SMTP Host / Port | 587 with Implicit TLS **off** for STARTTLS submission, or 465 with it **on** |
+   | Implicit TLS | On means the connection is encrypted from the first byte (465) |
+   | Require STARTTLS | On for port 587. Off allows plaintext delivery if the server refuses to upgrade |
+   | Verify Certificate | Leave on. Only disable for an internal relay with a self-signed cert |
+   | Username / Password | Leave blank for an unauthenticated relay |
+   | From Address / Name | What recipients see |
+
+   Save, then use **Send test email** — it validates the connection, TLS and
+   credentials and sends to your own address, reporting the real SMTP error if
+   something is wrong.
+
+   This is separate from the SMTP *plugin*, which forwards pager messages to
+   subscribers. They can use the same server; they are configured independently.
+
+3. **Admin → Settings → Auth → Self-Service Password Reset.** Turn it on. A
+   "Forgot your password?" link appears on the login page.
+
+Set **Minimum Password Length** while you are there (default 10). It applies to
+registration, password changes and admin-created accounts; existing passwords
+are untouched.
+
+### How it works
+
+A request mints a single-use link valid for 60 minutes by default. Only a hash
+of the token is stored, so database access does not yield working links, and
+asking for a new link invalidates the previous one. Setting a new password does
+not log you in — you log in with it, which proves it works.
+
+The "forgot" form always says the same thing whether or not the address is
+registered. That is intentional: a distinguishable response tells an attacker
+which addresses have accounts.
+
+Two things follow from enabling this, both by design:
+
+* **Changing your password signs you out everywhere else.** Sessions are tied to
+  the password they were issued against, so a reset actually evicts anyone
+  already holding a stolen session cookie. Admin-initiated resets do this too.
+* **Changing your email address now requires confirming it.** The new address
+  only takes effect once its confirmation link is clicked, and the old address
+  is notified. Without that, anyone with a live session could repoint the
+  recovery address and then reset the password.
+
+Changing your own password also requires entering your current one.
+
+### If you are not using HTTPS
+
+Session and CSRF cookies are marked `secure` when the Site URL is `https://`,
+which means browsers will not send them over plain HTTP. If you set an `https`
+Site URL but reach an instance over `http`, logins on that instance will stop
+working — set `SECURE_COOKIES=false` to override. Note that reset tokens travel
+in the clear without TLS, which materially weakens the feature.
 
 ## Branches
 

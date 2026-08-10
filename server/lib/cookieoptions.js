@@ -12,12 +12,31 @@ var siteurl = require('./siteurl');
 // TLS-terminating proxy. Setting this on for an instance served over http locks
 // everyone out, so SECURE_COOKIES exists as an explicit override in both
 // directions.
+//
+// Resolved once and then frozen. express-session fixes the session cookie's
+// flags when it is configured at boot, while the CSRF cookie is written on every
+// request - so if this were re-read each time, changing the Site URL in the
+// admin UI would flip one cookie to `secure` and leave the other alone. That
+// combination breaks login and is thoroughly confusing to diagnose. Freezing it
+// keeps the two in step, at the cost of needing a restart after changing the
+// Site URL's scheme (as several other settings here already do).
+var resolved = null;
+
 function secure(conf) {
+    if (resolved !== null) return resolved;
+
     var override = process.env.SECURE_COOKIES;
     if (typeof override === 'string' && override.trim() !== '') {
-        return /^(1|true|yes|on)$/i.test(override.trim());
+        resolved = /^(1|true|yes|on)$/i.test(override.trim());
+    } else {
+        resolved = siteurl.isHttps(conf);
     }
-    return siteurl.isHttps(conf);
+    return resolved;
+}
+
+// Tests only - lets a spec exercise both branches of the decision above.
+function reset() {
+    resolved = null;
 }
 
 // sameSite 'lax' is the workhorse here: it stops a cross-site form POST from
@@ -32,4 +51,4 @@ function base(conf) {
     };
 }
 
-module.exports = { secure: secure, base: base };
+module.exports = { secure: secure, base: base, reset: reset };

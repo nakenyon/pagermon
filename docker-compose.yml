@@ -22,6 +22,10 @@ services:
       # domain - set HOSTNAME1 in .env (see .env.example for details).
       - HOSTNAME=${HOSTNAME1:-}
       - USE_COOKIE_HOST=${USE_COOKIE_HOST1:-}
+      # External URL for links in password-reset emails, and the source of
+      # the secure-cookie decision. See .env.example.
+      - PAGERMON_URL=${PAGERMON_URL1:-}
+      - SECURE_COOKIES=${SECURE_COOKIES:-}
     restart: unless-stopped
     networks:
       - pagermon
@@ -84,6 +88,8 @@ services:
       - TZ=${TZ:-America/New_York}
       - HOSTNAME=${HOSTNAME2:-}
       - USE_COOKIE_HOST=${USE_COOKIE_HOST2:-}
+      - PAGERMON_URL=${PAGERMON_URL2:-}
+      - SECURE_COOKIES=${SECURE_COOKIES:-}
     restart: unless-stopped
     networks:
       - pagermon

@@ -1,3 +1,59 @@
+# Unreleased
+
+**Self-service password reset.** Users can recover their own account from an
+emailed link instead of asking an admin to set a password by hand. Off by
+default — see the [Password reset](README.md#password-reset) section for setup.
+Configure a **Site URL** (Settings → Global) and the new **Email** section
+(Settings), then enable it under Settings → Auth. There is a *Send test email*
+button that reports the real SMTP error rather than hiding it in the logs.
+
+Reset links are single use, expire after 60 minutes by default, and are
+superseded when a new one is issued. Only a hash of each token is stored. The
+"forgot" form answers identically whether or not an address is registered, so it
+cannot be used to discover which addresses have accounts.
+
+Because a reset link is a bearer credential for an account, this ships with the
+surrounding auth code tightened. Some of these are behaviour changes:
+
+* **Changing a password now signs out that account's other sessions.** Sessions
+  record the password generation they were issued against. Without this a reset
+  would not actually evict someone already holding a stolen session cookie.
+  Admin-initiated resets do it too.
+* **Changing your own password now requires your current one.** Previously any
+  live session could set a new password, so a borrowed browser or a stolen
+  cookie meant a permanently stolen account.
+* **Changing your email address now requires confirming the new one**, with a
+  notice sent to the old address. Otherwise a stolen session could repoint the
+  recovery address and then use the reset flow. If no mail server is configured
+  the address still saves directly, as before.
+* **A minimum password length is enforced** (default 10, configurable under
+  Settings → Auth) across registration, password changes and admin-created
+  accounts. Existing passwords are unaffected until they are next changed.
+* `/auth/userCheck/username` and `/auth/userCheck/email` now return only
+  `{taken: true|false}`. They previously echoed the matching account back to
+  anyone who asked, which made them a public account-enumeration service.
+* CSRF protection added to the `/auth` routes, and session cookies now set
+  `sameSite=lax`. The `secure` flag is derived from the Site URL scheme and can
+  be forced either way with `SECURE_COOKIES`. **If you set an `https` Site URL
+  but reach an instance over plain HTTP, logins there will break** — set
+  `SECURE_COOKIES=false`.
+* The session is now regenerated on login (session fixation), and `resave` /
+  `saveUninitialized` are off — `resave` had been the string `'true'`, which is
+  truthy, so every request was rewriting its session row.
+* New password hashes use bcrypt cost 12, up from 10. Hashing and verification
+  moved to bcryptjs' async API: it is pure JavaScript, so a synchronous cost-12
+  hash blocked the event loop for ~500ms, stalling message ingest on every
+  login.
+* `nodemailer` was declared as `"latest"` and is now pinned, since it is on the
+  credential-recovery path.
+
+Also in this release:
+
+* `themes/_shared` now holds assets that were byte-identical across all four
+  themes (`auth.main.js`, `reset.html`, `profile.html`). A theme still overrides
+  any of them by shipping its own copy. Custom themes are unaffected.
+* Expired and spent tokens are cleaned up by a daily job.
+
 # 2026.8.1
 
 * Message rotation is now actually implemented. Upstream shipped the config

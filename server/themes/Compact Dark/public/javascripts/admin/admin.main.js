@@ -1123,29 +1123,32 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
 
     // Routes
     .config(['$routeProvider', '$locationProvider', '$httpProvider', function ($routeProvider, $locationProvider, $httpProvider) {
+      // Version-stamped partial URLs - see the note in auth.main.js. A
+      // released template change must not be masked by a browser or CDN cache.
+      var v = '?v=' + encodeURIComponent((window.pagermonConfig || {}).version || 'dev');
       $routeProvider
         .when('/', {
-          templateUrl: '/templates/admin/admin.html',
+          templateUrl: '/templates/admin/admin.html' + v,
           controller: 'AdminController'
         })
         .when('/aliases', {
-          templateUrl: '/templates/admin/aliases.html',
+          templateUrl: '/templates/admin/aliases.html' + v,
           controller: 'AliasController'
         })
         .when('/users', {
-          templateUrl: '/templates/admin/users.html',
+          templateUrl: '/templates/admin/users.html' + v,
           controller: 'UserController'
         })
         .when('/users/:id', {
-          templateUrl: '/templates/admin/userDetails.html',
+          templateUrl: '/templates/admin/userDetails.html' + v,
           controller: 'UserDetailController'
         })
         .when('/settings', {
-          templateUrl: '/templates/admin/settings.html',
+          templateUrl: '/templates/admin/settings.html' + v,
           controller: 'SettingsController'
         })
         .when('/aliases/:id', {
-          templateUrl: '/templates/admin/aliasDetails.html',
+          templateUrl: '/templates/admin/aliasDetails.html' + v,
           controller: 'AliasDetailCtrl'
        });
       $httpProvider.defaults.headers.delete = { "Content-Type": "application/json;charset=utf-8" };

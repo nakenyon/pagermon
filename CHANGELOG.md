@@ -1,3 +1,20 @@
+# 2026.8.13
+
+**Upgrades no longer need a hard refresh.** The 2026.8.12 fix was correct on the
+server, but users kept seeing the old broken forgot-password form because the
+browser was still running the JavaScript and partials it had cached before the
+upgrade. Either stale half is enough: a fresh bundle driving an old partial
+binds to the wrong property just as surely as the reverse.
+
+The SPA bundles and every Angular partial URL now carry the release version
+(`auth.main.js?v=2026.8.13`, `/templates/auth/forgot.html?v=2026.8.13`), making
+each release a distinct resource that no browser or CDN can serve from cache.
+That matters particularly behind Cloudflare, which caches JavaScript by default.
+
+Upgrading *to* this release still needs one hard refresh (Ctrl+Shift+R), since
+the page that would load the new URLs is itself the cached one. From here on it
+is automatic.
+
 # 2026.8.12
 
 **The forgot-password and set-new-password forms did not work at all.** Entering

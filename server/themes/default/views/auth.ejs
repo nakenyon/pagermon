@@ -5,8 +5,8 @@
 <base href="/auth/">
 </head>
 
-<script>window.pagermonConfig = { passwordReset: <%= passwordReset === true %> };</script>
-<script src="/javascripts/auth.main.js"></script>
+<script>window.pagermonConfig = { passwordReset: <%= passwordReset === true %>, version: "<%= version %>" };</script>
+<script src="/javascripts/auth.main.js?v=<%= version %>"></script>
 
 <body id="admin-body">
   <% include global/menu.ejs %>

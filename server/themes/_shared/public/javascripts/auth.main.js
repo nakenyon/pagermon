@@ -354,33 +354,42 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
     }])
 
     .config(['$routeProvider', '$locationProvider', '$httpProvider', function ($routeProvider, $locationProvider, $httpProvider) {
+        // Partials are fetched over HTTP and cached like any other asset, so a
+        // release that changes a template can otherwise be half-applied: a fresh
+        // bundle driving a stale partial, or the reverse. Both were seen after
+        // the 2026.8.12 upgrade, where a cached partial kept a fixed form
+        // broken until a hard refresh. Stamping the version onto the URL makes
+        // every release a distinct resource, which no browser or CDN can serve
+        // from cache.
+        var v = '?v=' + encodeURIComponent((window.pagermonConfig || {}).version || 'dev');
+
         $routeProvider
             .when('/login', {
-                templateUrl: '/templates/auth/login.html',
+                templateUrl: '/templates/auth/login.html' + v,
                 controller: 'LoginController'
             })
             .when('/profile', {
-                templateUrl: '/templates/auth/profile.html',
+                templateUrl: '/templates/auth/profile.html' + v,
                 controller: 'ProfileController'
             })
             .when('/register', {
-                templateUrl: '/templates/auth/register.html',
+                templateUrl: '/templates/auth/register.html' + v,
                 controller: 'RegisterController'
             })
             .when('/reset', {
-                templateUrl: '/templates/auth/reset.html',
+                templateUrl: '/templates/auth/reset.html' + v,
                 controller: 'ResetController'
             })
             .when('/forgot', {
-                templateUrl: '/templates/auth/forgot.html',
+                templateUrl: '/templates/auth/forgot.html' + v,
                 controller: 'ForgotController'
             })
             .when('/reset-password/:token', {
-                templateUrl: '/templates/auth/resetPassword.html',
+                templateUrl: '/templates/auth/resetPassword.html' + v,
                 controller: 'ResetPasswordController'
             })
             .when('/verify-email/:token', {
-                templateUrl: '/templates/auth/verifyEmail.html',
+                templateUrl: '/templates/auth/verifyEmail.html' + v,
                 controller: 'VerifyEmailController'
             });
         $httpProvider.defaults.headers.delete = { "Content-Type": "application/json;charset=utf-8" };

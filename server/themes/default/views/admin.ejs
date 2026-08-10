@@ -5,7 +5,8 @@
 <base href="/admin/">
 </head>
 
-<script src="/javascripts/admin/admin.main.js"></script>
+<script>window.pagermonConfig = { version: "<%= version %>" };</script>
+<script src="/javascripts/admin/admin.main.js?v=<%= version %>"></script>
 
 <body id="admin-body">
   <% include global/menu.ejs %>

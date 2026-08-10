@@ -184,6 +184,10 @@ app.use(passport.initialize());
 app.use(passport.session()); // persistent login sessions
 app.use(flash());
 app.use(express.static(path.join(__dirname,'themes',theme, 'public')));
+// Fallback for assets that are identical across every theme (auth.main.js and the
+// auth partials). Mounted after the theme so a theme file still wins when present -
+// a theme only needs to ship the files it actually restyles.
+app.use(express.static(path.join(__dirname,'themes','_shared', 'public')));
 app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
 app.use(function(req, res, next) {
   res.locals.version = version;

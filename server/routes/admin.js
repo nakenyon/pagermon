@@ -40,9 +40,13 @@ router.route('/settingsData')
                     plugins.push(pConf);
             }
         });
+        // A directory under ./themes is only selectable if it can actually be
+        // rendered, i.e. it has a views/ dir. This filters out ./themes/_shared,
+        // which holds assets common to every theme rather than a theme itself.
         let themes = [];
         fs.readdirSync('./themes').forEach(file => {
-            themes.push(file)
+            if (fs.existsSync(`./themes/${file}/views`))
+                themes.push(file)
         });
         // logger.main.debug(util.format('Plugin Config:\n\n%o',plugins));
         let data = { "settings": settings, "plugins": plugins, "themes": themes }

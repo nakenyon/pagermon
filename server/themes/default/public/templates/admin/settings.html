@@ -70,6 +70,13 @@
               </div>
             </div>
             <div class="form-group">
+              <label for="global.siteUrl" class="col-xs-4 col-sm-3 control-label">Site URL</label>
+              <div class="col-xs-8 col-sm-9">
+                  <input class="form-control" type="text" name="global.siteUrl" ng-model="settings.global.siteUrl" placeholder="https://pager.example.com">
+                <span id="helpBlock" class="help-block">The external address users reach this server on, including <code>http://</code> or <code>https://</code>. Required for password reset - links in emails are built from this. It is never taken from the incoming request, because a forged Host header would otherwise put an attacker's address in a genuine reset email. Overridden by the <code>PAGERMON_URL</code> environment variable if set.</span>
+              </div>
+            </div>
+            <div class="form-group">
               <label for="global.frontPopupEnable" class="col-xs-4 col-sm-3 control-label">Enable One Time Modal</label>
               <div class="col-xs-8 col-sm-9">
                 <div class="checkbox">
@@ -447,6 +454,96 @@
               </div>
             </div>
 
+            <hr />
+            <h5>Email</h5><span class="text-muted">Outbound mail for password resets and email confirmation. Separate from the SMTP notification plugin below, which sends pager messages.</span>
+            <div class="form-group">
+              <label for="mail.enabled" class="col-xs-4 col-sm-3 control-label">Enable Email</label>
+              <div class="col-xs-8 col-sm-9">
+                <div class="checkbox">
+                  <label>
+                    <input type="checkbox" name="mail.enabled" ng-model="settings.mail.enabled"> Allow PagerMon to send email.
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.host" class="col-xs-4 col-sm-3 control-label">SMTP Host</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="text" name="mail.host" ng-model="settings.mail.host" placeholder="smtp.example.com">
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.port" class="col-xs-4 col-sm-3 control-label">SMTP Port</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="number" name="mail.port" ng-model="settings.mail.port">
+                <span id="helpBlock" class="help-block">587 for STARTTLS (leave "Implicit TLS" off), or 465 for implicit TLS (turn it on).</span>
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.secure" class="col-xs-4 col-sm-3 control-label">Implicit TLS</label>
+              <div class="col-xs-8 col-sm-9">
+                <div class="checkbox">
+                  <label>
+                    <input type="checkbox" name="mail.secure" ng-model="settings.mail.secure"> The connection is encrypted from the start (port 465). Leave off for port 587, which starts in the clear and upgrades with STARTTLS.
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled || settings.mail.secure">
+              <label for="mail.requireTLS" class="col-xs-4 col-sm-3 control-label">Require STARTTLS</label>
+              <div class="col-xs-8 col-sm-9">
+                <div class="checkbox">
+                  <label>
+                    <input type="checkbox" name="mail.requireTLS" ng-model="settings.mail.requireTLS"> Refuse to send if the server will not upgrade the connection. Turning this off means mail can be delivered in plaintext.
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.rejectUnauthorized" class="col-xs-4 col-sm-3 control-label">Verify Certificate</label>
+              <div class="col-xs-8 col-sm-9">
+                <div class="checkbox">
+                  <label>
+                    <input type="checkbox" name="mail.rejectUnauthorized" ng-model="settings.mail.rejectUnauthorized"> Check the mail server's TLS certificate. Only turn this off for an internal relay with a self-signed certificate - without it there is no guarantee you are talking to the right server.
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.username" class="col-xs-4 col-sm-3 control-label">SMTP Username</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="text" name="mail.username" ng-model="settings.mail.username" autocomplete="off">
+                <span id="helpBlock" class="help-block">Leave blank for an unauthenticated relay.</span>
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.password" class="col-xs-4 col-sm-3 control-label">SMTP Password</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="password" name="mail.password" ng-model="settings.mail.password" autocomplete="new-password">
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.fromAddress" class="col-xs-4 col-sm-3 control-label">From Address</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="text" name="mail.fromAddress" ng-model="settings.mail.fromAddress" placeholder="pagermon@example.com">
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label for="mail.fromName" class="col-xs-4 col-sm-3 control-label">From Name</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="text" name="mail.fromName" ng-model="settings.mail.fromName">
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.mail.enabled">
+              <label class="col-xs-4 col-sm-3 control-label">Test</label>
+              <div class="col-xs-8 col-sm-9">
+                <button type="button" class="btn btn-default" ng-click="mailTest()" ng-disabled="mailTesting">
+                  <span ng-if="mailTesting" class="fa fa-refresh fa-spin"></span> Send test email
+                </button>
+                <span id="helpBlock" class="help-block">Save your settings first - this tests what is stored on the server, not what is on screen.</span>
+                <span ng-if="mailTestResult" class="text-{{mailTestResult.type}}">{{mailTestResult.text}}</span>
+              </div>
+            </div>
             <h5>Auth</h5>
             <div class="form-group">
               <label for="auth.registration" class="col-xs-4 col-sm-3 control-label">Type</label>
@@ -457,8 +554,32 @@
                     <p><b> Note: You must restart the application after making this change.</b>
                   </label>
               </div>
-            </fieldset>
             </div>
+            <div class="form-group">
+              <label for="auth.passwordReset" class="col-xs-4 col-sm-3 control-label">Self-Service Password Reset</label>
+              <div class="col-xs-8 col-sm-9">
+                <div class="checkbox">
+                  <label>
+                    <input type="checkbox" name="auth.passwordReset" ng-model="settings.auth.passwordReset"> Let users reset their own password by email. Has no effect until Email above is configured and a Site URL is set.
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" ng-hide="!settings.auth.passwordReset">
+              <label for="auth.passwordResetTTL" class="col-xs-4 col-sm-3 control-label">Reset Link Lifetime</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="number" name="auth.passwordResetTTL" ng-model="settings.auth.passwordResetTTL">
+                <span id="helpBlock" class="help-block">Minutes a reset link stays valid, 5 to 1440. Defaults to 60 if left blank or out of range. Links are single use regardless.</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="auth.minPasswordLength" class="col-xs-4 col-sm-3 control-label">Minimum Password Length</label>
+              <div class="col-xs-8 col-sm-9">
+                <input class="form-control" type="number" name="auth.minPasswordLength" ng-model="settings.auth.minPasswordLength">
+                <span id="helpBlock" class="help-block">Applies to registration, password changes and admin-created accounts. Minimum 8, defaults to 10. Existing passwords are not affected.</span>
+              </div>
+            </div>
+            </fieldset>
             <div class="row">
             <label class="col-xs-4 col-sm-3 control-label">API Keys</label>
             </div>

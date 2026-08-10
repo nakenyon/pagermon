@@ -128,7 +128,7 @@ describe('POST /api/user', () => {
                 username: 'idontexist',
                 email: 'idontexist@fake.com',
                 givenname: 'Dude',
-                password: 'changeme',
+                password: 'a-compliant-password',
                 status: 'active',
                 role: 'admin'
             })
@@ -406,7 +406,7 @@ describe('POST /api/user/:id', () => {
                 username: 'idontexist',
                 email: 'idontexist@fake.com',
                 givenname: 'Dude',
-                password: 'changeme',
+                password: 'a-compliant-password',
                 status: 'active',
                 role: 'admin'
             })
@@ -427,7 +427,7 @@ describe('POST /api/user/:id', () => {
                 username: 'idontexist',
                 email: 'idontexist@fake.com',
                 givenname: 'Dude',
-                password: 'changeme',
+                password: 'a-compliant-password',
                 status: 'active',
                 role: 'admin'
             })
@@ -538,7 +538,7 @@ describe('POST /api/user/:id', () => {
                 email: 'none1@none.com',
                 givenname: 'User',
                 username: 'useractive2',
-                password: 'changeme'
+                password: 'a-compliant-password'
             })
             .end((err, res) => {
                 should.not.exist(err);
@@ -556,7 +556,7 @@ describe('POST /api/user/:id', () => {
                 email: 'none1@none.com',
                 givenname: 'User',
                 username: 'useractive2',
-                password: 'changeme2'
+                password: 'a-compliant-password2'
             })
             .end((err, res) => {
                 should.not.exist(err);

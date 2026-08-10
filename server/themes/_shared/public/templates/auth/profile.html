@@ -39,6 +39,11 @@
                 <span ng-if="userLoading" class="fa fa-refresh fa-spin fa-2x fa-fw form-control-feedback" aria-hidden="true"></span>
                 <span id="helpBlock" class="help-block">Required</span>
                 <span ng-if="existingEmail" class="text-danger pull-left">Email already exists! </span>
+                <!-- A new address is not written until it is confirmed, so without
+                     this the form would keep showing the old one and look broken. -->
+                <span ng-if="user.pendingEmail" class="text-warning pull-left">
+                  Awaiting confirmation: {{user.pendingEmail}} - check that inbox for the confirmation link.
+                </span>
               </div>
             </div>
             <div class="btn-group-vertical" id="buttons-aliasDetail">

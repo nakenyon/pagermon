@@ -66,6 +66,48 @@ router.route('/settingsData')
         }
     });
 
+// Validates the mail settings and sends a real message to the calling admin.
+// Without this, the first sign that SMTP is misconfigured is a user reporting a
+// reset email that never arrived - and the actual error would only be visible in
+// the container log.
+router.route('/mailTest').post(authHelper.isAdmin, function (req, res) {
+    nconf.load();
+    var mailer = require('../mail/mailer');
+    var siteurl = require('../lib/siteurl');
+
+    var to = (req.body && req.body.to) || (req.user && req.user.email);
+    if (!to) {
+        return res.status(400).send({ status: 'failed', error: 'No address to send to' });
+    }
+
+    var site = siteurl.resolve(nconf);
+    // Reported as a warning rather than an error: mail can be working perfectly
+    // while the links inside it are unbuildable, and that is worth knowing before
+    // switching password reset on.
+    var warning = site ? null : 'Mail works, but no Site URL is set - reset links cannot be built yet';
+
+    return mailer
+        .verify(nconf)
+        .then(function () {
+            return mailer.send(nconf, {
+                to: to,
+                subject: (nconf.get('global:monitorName') || 'PagerMon') + ' - test email',
+                text: 'This is a test email from PagerMon. If you received it, outbound mail is working.',
+                html: '<p>This is a test email from PagerMon. If you received it, outbound mail is working.</p>',
+            });
+        })
+        .then(function () {
+            logger.main.info('Mail: test email sent to ' + to);
+            res.status(200).send({ status: 'ok', sentTo: to, warning: warning });
+        })
+        .catch(function (err) {
+            logger.main.error('Mail: test failed: ' + err.message);
+            // The SMTP error is passed through deliberately - this endpoint is
+            // admin-only and the message is the whole point of the button.
+            res.status(400).send({ status: 'failed', error: err.message });
+        });
+});
+
 router.get('*', authHelper.isAdminGUI, function (req, res, next) {
     res.render('admin', { pageTitle: 'Admin' });
 });

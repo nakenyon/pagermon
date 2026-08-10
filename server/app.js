@@ -165,11 +165,24 @@ if (dbtype === 'sqlite3') {
     sessionStoreOptions.db = new sqlite3.Database(nconf.get('database:file'));
 }
 
+var cookieoptions = require('./lib/cookieoptions');
+
 var sessSet = {
-    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }, // 1 week
+    cookie: {
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+        httpOnly: true,
+        // Blocks a cross-site POST from carrying the session cookie at all. See
+        // lib/cookieoptions.js for why `secure` is derived rather than fixed.
+        sameSite: 'lax',
+        secure: cookieoptions.secure(nconf)
+    },
     store: new SQLiteStore(sessionStoreOptions),
-    saveUninitialized: true,
-    resave: 'true',
+    // Was `true`, which wrote a session row for every anonymous request - the
+    // store grew with crawler traffic and each row was a cookie nobody used.
+    saveUninitialized: false,
+    // Was the string 'true', which is truthy, so resave has silently been on
+    // since this was written: every request rewrote its session row.
+    resave: false,
     secret: secret
 }
 
@@ -182,6 +195,9 @@ if (process.env.HOSTNAME && process.env.USE_COOKIE_HOST)
 app.use(session(sessSet));
 app.use(passport.initialize());
 app.use(passport.session()); // persistent login sessions
+// Must run after passport.session() so req.user is populated: this drops any
+// session issued before the account's last password change.
+app.use(require('./middleware/sessionversion').check);
 app.use(flash());
 app.use(express.static(path.join(__dirname,'themes',theme, 'public')));
 // Fallback for assets that are identical across every theme (auth.main.js and the
@@ -197,6 +213,11 @@ app.use(function(req, res, next) {
   res.locals.bannerEnable = nconf.get('global:bannerEnable');
   res.locals.bannerSeverity = nconf.get('global:bannerSeverity');
   res.locals.bannerContent = nconf.get('global:bannerContent');
+  // Whether to offer the "Forgot your password?" link. Set here for the same
+  // reason as the banner - the login page is rendered by routes/auth.js, which
+  // does not go through routes/index.js. The link is hidden unless self-service
+  // reset is both switched on and actually able to send mail.
+  res.locals.passwordReset = require('./lib/passwordreset').isEnabled(nconf);
   next();
 });
 
@@ -280,6 +301,8 @@ if (dbtype == 'mysql') {
 // test - the suite drives cron/messageRotation.js directly.
 if (process.env.NODE_ENV !== 'test') {
   require('./cron/messageRotation').schedule(db, nconf);
+  // Same rationale: drops spent and expired password-reset / email-change tokens.
+  require('./cron/tokenCleanup').schedule(db);
 }
 
 //Disable all logging for tests

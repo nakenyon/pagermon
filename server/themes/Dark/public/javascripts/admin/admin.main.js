@@ -13,6 +13,9 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         Settings: $resource('/admin/settingsData', null, {
           'post': { method:'POST', isArray: false }
         }),
+        MailTest: $resource('/admin/mailTest', null, {
+          'post': { method:'POST', isArray: false }
+        }),
         AliasDupeCheck: $resource('/api/capcodeCheck/:id', {id: '@id'}, {
           'post': { method:'POST', isArray: false }
         }),
@@ -899,10 +902,44 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
           results.settings.aliases.templates = [{}];
         if (!results.settings.auth.keys)
           results.settings.auth.keys = [{}];
+        // Present only in configs created after the email feature landed, so
+        // an upgraded install needs them filled in before the form binds.
+        if (!results.settings.mail)
+          results.settings.mail = { enabled: false, port: 587, secure: false, requireTLS: true, rejectUnauthorized: true, username: '', password: '', fromAddress: '', fromName: 'PagerMon' };
+        if (typeof results.settings.global.siteUrl === 'undefined')
+          results.settings.global.siteUrl = '';
+        if (typeof results.settings.auth.passwordReset === 'undefined')
+          results.settings.auth.passwordReset = false;
+        if (!results.settings.auth.passwordResetTTL)
+          results.settings.auth.passwordResetTTL = 60;
+        if (!results.settings.auth.minPasswordLength)
+          results.settings.auth.minPasswordLength = 10;
         $scope.settings = results.settings;
         $scope.plugins = results.plugins;
         $scope.themes = results.themes;
       });
+
+
+      // Verifies the SMTP settings the server currently has stored (not what is
+      // on screen) and sends a real message, so a misconfiguration surfaces here
+      // rather than as a reset email that never arrives.
+      $scope.mailTest = function() {
+        $scope.mailTesting = true;
+        $scope.mailTestResult = null;
+        Api.MailTest.post(null, {}).$promise.then(function (response) {
+          $scope.mailTesting = false;
+          $scope.mailTestResult = {
+            type: response.warning ? 'warning' : 'success',
+            text: response.warning || ('Test email sent to ' + response.sentTo)
+          };
+        }, function (response) {
+          $scope.mailTesting = false;
+          $scope.mailTestResult = {
+            type: 'danger',
+            text: 'Failed: ' + ((response.data && response.data.error) || 'unknown error')
+          };
+        });
+      };
 
       $scope.settingsSubmit = function() {
         $scope.loading = true;

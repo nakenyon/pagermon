@@ -28,10 +28,12 @@ passport.use(
                                 if (!user) {
                                         return done(null, false);
                                 }
-                                if (!authHelper.comparePass(password, user.password)) {
-                                        return done(null, false);
-                                }
-                                return done(null, user);
+                                // Async compare so a login does not block the
+                                // event loop for the duration of the hash - see
+                                // comparePassAsync in middleware/authhelper.js.
+                                return authHelper
+                                        .comparePassAsync(password, user.password)
+                                        .then(matched => done(null, matched ? user : false));
                         })
                         .catch(err => done(err));
         })

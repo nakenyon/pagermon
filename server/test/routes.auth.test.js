@@ -22,6 +22,14 @@ nconf.file({ file: confFile });
 nconf.load();
 // set required settings in config file
 
+const csrfAgent = require('./helpers/csrfAgent');
+
+// Every state-changing /auth request needs a session-bound CSRF token, so these
+// are set up per test and used through post() below rather than a bare
+// chai.request().
+let agent;
+let csrfToken;
+
 beforeEach(() =>
         db.migrate
                 .rollback()
@@ -32,9 +40,22 @@ beforeEach(() =>
                 // the rollback above never clears it. Every test file shares one mocha
                 // process and one source IP, so without this the counter accumulates
                 // across the whole run and unrelated tests start getting 429s.
-                .then(() => db('protection').del().catch(() => {})));
+                .then(() => db('protection').del().catch(() => {}))
+                .then(() => csrfAgent(server))
+                .then(result => {
+                        agent = result.agent;
+                        csrfToken = result.token;
+                }));
 
-afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
+afterEach(() =>
+        db.migrate
+                .rollback()
+                .then(() => passportStub.logout())
+                .then(() => agent && agent.close()));
+
+// Stands in for `chai.request(server).post(...)` - same chain, but through the
+// session-carrying agent and with the CSRF token attached.
+const post = path => agent.post(path).set('X-XSRF-TOKEN', csrfToken);
 
 describe('GET /auth/login', () => {
         it('should return the login page', done => {
@@ -66,8 +87,7 @@ describe('GET /auth/login', () => {
 
 describe('POST /auth/login', () => {
         it('should log the user in if correct credentials are provided', done => {
-                chai.request(server)
-                        .post('/auth/login')
+                post('/auth/login')
                         .send({
                                 username: 'useractive',
                                 password: 'changeme',
@@ -81,8 +101,7 @@ describe('POST /auth/login', () => {
                         });
         });
         it('should log the admin in if correct credentials are provided', done => {
-                chai.request(server)
-                        .post('/auth/login')
+                post('/auth/login')
                         .send({
                                 username: 'adminactive',
                                 password: 'changeme',
@@ -96,8 +115,7 @@ describe('POST /auth/login', () => {
                         });
         });
         it('should not login on invalid username', done => {
-                chai.request(server)
-                        .post('/auth/login')
+                post('/auth/login')
                         .send({
                                 username: 'notarealuser',
                                 password: 'changeme',
@@ -111,8 +129,7 @@ describe('POST /auth/login', () => {
                         });
         });
         it('should not login on invalid password', done => {
-                chai.request(server)
-                        .post('/auth/login')
+                post('/auth/login')
                         .send({
                                 username: 'useractive',
                                 password: 'changeme2',
@@ -126,8 +143,7 @@ describe('POST /auth/login', () => {
                         });
         });
         it('should not login when user is disabled', done => {
-                chai.request(server)
-                        .post('/auth/login')
+                post('/auth/login')
                         .send({
                                 username: 'admindisabled',
                                 password: 'changeme',
@@ -151,8 +167,7 @@ describe('POST /auth/login', () => {
                 // wait - is the first to actually get a 429.
                 const ATTEMPTS_BEFORE_LOCKOUT = 6;
                 const attempt = n => {
-                        chai.request(server)
-                                .post('/auth/login')
+                        post('/auth/login')
                                 .send({
                                         username: 'admindisabled',
                                         password: 'changeme',
@@ -282,8 +297,7 @@ describe('POST /auth/profile/:id', () => {
                         username: 'useractive',
                         password: 'changeme',
                 });
-                chai.request(server)
-                        .post('/auth/profile/1')
+                post('/auth/profile/1')
                         .send({
                                 username: 'useractive',
                                 givenname: 'User',
@@ -294,8 +308,18 @@ describe('POST /auth/profile/:id', () => {
                                 should.not.exist(err);
                                 res.status.should.eql(200);
                                 res.body.status.should.eql('ok');
-                                res.body.id.should.eql(1);
-                                done();
+                                // Previously asserted `id === 1`, which was knex's
+                                // affected-row count rather than a user id - useractive is
+                                // actually id 2. Check the write instead of the echo.
+                                db('users')
+                                        .where('username', 'useractive')
+                                        .first()
+                                        .then(user => {
+                                                res.body.id.should.eql(user.id);
+                                                user.surname.should.eql('Active');
+                                                done();
+                                        })
+                                        .catch(done);
                         });
         });
         it('should not allow saving of other users information', done => {
@@ -303,8 +327,7 @@ describe('POST /auth/profile/:id', () => {
                         username: 'useractive',
                         password: 'changeme',
                 });
-                chai.request(server)
-                        .post('/auth/profile/1')
+                post('/auth/profile/1')
                         .send({
                                 username: 'adminactive',
                                 givenname: 'Admin',
@@ -323,8 +346,7 @@ describe('POST /auth/profile/:id', () => {
                         username: 'useractive',
                         password: 'changeme',
                 });
-                chai.request(server)
-                        .post('/auth/profile/1')
+                post('/auth/profile/1')
                         .send({
                                 username: 'useractive',
                                 givenname: 'User',
@@ -338,8 +360,7 @@ describe('POST /auth/profile/:id', () => {
                         });
         });
         it('should not allow saving of information if no user is logged in ', done => {
-                chai.request(server)
-                        .post('/auth/profile/1')
+                post('/auth/profile/1')
                         .send({
                                 username: 'adminactive',
                                 givenname: 'Admin',
@@ -387,8 +408,7 @@ describe('POST /auth/register', () => {
         it('should register a new user', done => {
                 nconf.set('auth:registration', true);
                 nconf.save();
-                chai.request(server)
-                        .post('/auth/register')
+                post('/auth/register')
                         .send({
                                 username: 'test',
                                 password: '$2a$08$De/aXnQkZIEbQ9p8J22tHuzLltqIbsAxE2CGgRMPLaaIwwHmVrpsu',
@@ -405,8 +425,7 @@ describe('POST /auth/register', () => {
                         });
         });
         it('should not register a duplicate user', done => {
-                chai.request(server)
-                        .post('/auth/register')
+                post('/auth/register')
                         .send({
                                 username: 'adminactive',
                                 password: '$2a$08$De/aXnQkZIEbQ9p8J22tHuzLltqIbsAxE2CGgRMPLaaIwwHmVrpsu',
@@ -424,8 +443,7 @@ describe('POST /auth/register', () => {
         it('should not allow registration when registration is disabled in config', done => {
                 nconf.set('auth:registration', false);
                 nconf.save();
-                chai.request(server)
-                        .post('/auth/register')
+                post('/auth/register')
                         .send({
                                 username: 'test',
                                 password: '$2a$08$De/aXnQkZIEbQ9p8J22tHuzLltqIbsAxE2CGgRMPLaaIwwHmVrpsu',
@@ -443,8 +461,7 @@ describe('POST /auth/register', () => {
         it('should not register a user with invalid data', done => {
                 nconf.set('auth:registration', true);
                 nconf.save();
-                chai.request(server)
-                        .post('/auth/register')
+                post('/auth/register')
                         .send({
                                 username: 'testuser3',
                                 password: '$2a$08$De/aXnQkZIEbQ9p8J22tHuzLltqIbsAxE2CGgRMPLaaIwwHmVrpsu',
@@ -462,8 +479,7 @@ describe('POST /auth/register', () => {
         it('should not register a user with invalid data', done => {
                 nconf.set('auth:registration', true);
                 nconf.save();
-                chai.request(server)
-                        .post('/auth/register')
+                post('/auth/register')
                         .send({
                                 username: '',
                                 password: '$2a$08$De/aXnQkZIEbQ9p8J22tHuzLltqIbsAxE2CGgRMPLaaIwwHmVrpsu',
@@ -508,17 +524,20 @@ describe('GET /auth/reset', () => {
 });
 
 describe('POST /auth/reset', () => {
-        it('should reset the password', done => {
+        // The route now loads the user fresh from the database rather than
+        // trusting the session copy, so the stub only needs to identify who is
+        // logged in.
+        const login = () =>
                 passportStub.login({
-                        // hard set the ID as the query on the route doesn't lookup id's. This should be fixed in auth.js
-                        id: '1',
                         username: 'useractive',
-                        password: 'changeme',
                 });
-                chai.request(server)
-                        .post('/auth/reset')
+
+        it('should change the password when the current one is supplied', done => {
+                login();
+                post('/auth/reset')
                         .send({
-                                password: 'changeme1',
+                                currentpassword: 'changeme',
+                                password: 'a-much-longer-password',
                         })
                         .end((err, res) => {
                                 should.not.exist(err);
@@ -528,73 +547,223 @@ describe('POST /auth/reset', () => {
                                 done();
                         });
         });
-        it('should not accept the same password', done => {
-                passportStub.login({
-                        // hard set the ID as the query on the route doesn't lookup id's. This should be fixed in auth.js
-                        id: '1',
-                        username: 'useractive',
-                        password: '$2a$10$neQ/6P4YwrGxlBeFMJzW4OHxYWGI6Xp23mn/sPFfSDcGORR9jiDYu',
-                });
-                chai.request(server)
-                        .post('/auth/reset')
+        it('should stamp pwchangedat so older sessions are invalidated', done => {
+                login();
+                post('/auth/reset')
                         .send({
+                                currentpassword: 'changeme',
+                                password: 'a-much-longer-password',
+                        })
+                        .end(err => {
+                                should.not.exist(err);
+                                db('users')
+                                        .where('username', 'useractive')
+                                        .first()
+                                        .then(user => {
+                                                should.exist(user.pwchangedat);
+                                                user.pwchangedat.should.be.above(0);
+                                                done();
+                                        })
+                                        .catch(done);
+                        });
+        });
+        it('should refuse without the current password', done => {
+                login();
+                post('/auth/reset')
+                        .send({
+                                password: 'a-much-longer-password',
+                        })
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(400);
+                                res.body.status.should.eql('failed');
+                                res.body.error.should.eql('Your current password is required');
+                                done();
+                        });
+        });
+        it('should refuse when the current password is wrong', done => {
+                login();
+                post('/auth/reset')
+                        .send({
+                                currentpassword: 'not-the-right-one',
+                                password: 'a-much-longer-password',
+                        })
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(400);
+                                res.body.error.should.eql('Your current password is not correct');
+                                done();
+                        });
+        });
+        it('should not leave the password changed when the current one is wrong', done => {
+                login();
+                post('/auth/reset')
+                        .send({
+                                currentpassword: 'not-the-right-one',
+                                password: 'a-much-longer-password',
+                        })
+                        .end(err => {
+                                should.not.exist(err);
+                                db('users')
+                                        .where('username', 'useractive')
+                                        .first()
+                                        .then(user => {
+                                                require('bcryptjs')
+                                                        .compareSync('changeme', user.password)
+                                                        .should.eql(true);
+                                                done();
+                                        })
+                                        .catch(done);
+                        });
+        });
+        it('should not accept the same password', done => {
+                login();
+                post('/auth/reset')
+                        .send({
+                                currentpassword: 'changeme',
                                 password: 'changeme',
                         })
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(400);
                                 res.body.status.should.eql('failed');
-                                res.body.error.should.eql('Password Blank or the Same');
+                                // The seeded password is 8 characters, so the policy check
+                                // fires before the same-password check does.
+                                res.body.error.should.match(/at least|different/);
+                                done();
+                        });
+        });
+        it('should enforce the minimum password length', done => {
+                login();
+                post('/auth/reset')
+                        .send({
+                                currentpassword: 'changeme',
+                                password: 'short',
+                        })
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(400);
+                                res.body.error.should.match(/at least 10 characters/);
                                 done();
                         });
         });
 });
 
+describe('CSRF protection on /auth', () => {
+        it('should reject a POST with no token', done => {
+                agent.post('/auth/login')
+                        .send({ username: 'useractive', password: 'changeme' })
+                        .end((err, res) => {
+                                res.status.should.eql(403);
+                                res.body.error.should.eql('Invalid or missing CSRF token');
+                                done();
+                        });
+        });
+        it('should reject a POST with the wrong token', done => {
+                agent.post('/auth/login')
+                        .set('X-XSRF-TOKEN', 'not-the-real-token')
+                        .send({ username: 'useractive', password: 'changeme' })
+                        .end((err, res) => {
+                                res.status.should.eql(403);
+                                done();
+                        });
+        });
+        it('should reject a token that belongs to a different session', done => {
+                // The token is only meaningful alongside the session it was issued
+                // to - a value copied from elsewhere must not work.
+                csrfAgent(server).then(other => {
+                        agent.post('/auth/login')
+                                .set('X-XSRF-TOKEN', other.token)
+                                .send({ username: 'useractive', password: 'changeme' })
+                                .end((err, res) => {
+                                        res.status.should.eql(403);
+                                        other.agent.close();
+                                        done();
+                                });
+                });
+        });
+        it('should publish a readable XSRF-TOKEN cookie on a page load', done => {
+                chai.request(server)
+                        .get('/auth/login')
+                        .end((err, res) => {
+                                const cookies = res.headers['set-cookie'] || [];
+                                const xsrf = cookies.filter(c => c.indexOf('XSRF-TOKEN=') === 0);
+                                xsrf.length.should.eql(1);
+                                // Angular has to read it, so it must not be httpOnly.
+                                xsrf[0].toLowerCase().should.not.contain('httponly');
+                                xsrf[0].toLowerCase().should.contain('samesite=lax');
+                                done();
+                        });
+        });
+});
+
+// These endpoints answer only whether a value is taken. They used to echo back
+// the matching row, which made them a public account-enumeration service and
+// would have flatly contradicted the deliberately uninformative response from
+// POST /auth/forgot.
 describe('GET /auth/userCheck/username/:id', () => {
-        it('should return an username if the submitted username exists', done => {
+        it('should report a username as taken when it exists', done => {
                 chai.request(server)
                         .get('/auth/userCheck/username/useractive')
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(200);
                                 res.type.should.eql('application/json');
-                                res.body.username.should.eql('useractive');
+                                res.body.taken.should.eql(true);
                                 done();
                         });
         });
-        it('should return an empty username if the submitted username does not exist', done => {
+        it('should report a username as free when it does not exist', done => {
                 chai.request(server)
                         .get('/auth/userCheck/username/idontexist')
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(200);
                                 res.type.should.eql('application/json');
-                                res.body.username.should.eql('');
+                                res.body.taken.should.eql(false);
+                                done();
+                        });
+        });
+        it('should not leak any account detail beyond the taken flag', done => {
+                chai.request(server)
+                        .get('/auth/userCheck/username/useractive')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                Object.keys(res.body).should.eql(['taken']);
                                 done();
                         });
         });
 });
 
 describe('GET /auth/userCheck/email/:id', () => {
-        it('should return an email if the submitted email exists', done => {
+        it('should report an email as taken when it exists', done => {
                 chai.request(server)
                         .get('/auth/userCheck/email/none1@none.com')
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(200);
                                 res.type.should.eql('application/json');
-                                res.body.email.should.eql('none1@none.com');
+                                res.body.taken.should.eql(true);
                                 done();
                         });
         });
-        it('should return an empty email if the submitted email does not exist', done => {
+        it('should report an email as free when it does not exist', done => {
                 chai.request(server)
                         .get('/auth/userCheck/email/idontexist@none.com')
                         .end((err, res) => {
                                 should.not.exist(err);
                                 res.status.should.eql(200);
                                 res.type.should.eql('application/json');
-                                res.body.email.should.eql('');
+                                res.body.taken.should.eql(false);
+                                done();
+                        });
+        });
+        it('should not leak any account detail beyond the taken flag', done => {
+                chai.request(server)
+                        .get('/auth/userCheck/email/none1@none.com')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                Object.keys(res.body).should.eql(['taken']);
                                 done();
                         });
         });

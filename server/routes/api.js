@@ -23,6 +23,7 @@ router.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 
 const passport = require('../auth/local');
 var authHelper = require('../middleware/authhelper')
+var passwordpolicy = require('../lib/passwordpolicy')
 
 router.use(function (req, res, next) {
   res.locals.login = req.isAuthenticated();
@@ -1216,6 +1217,10 @@ router.route('/user')
             //add logging
             res.status(400).send({ 'status': 'error', 'error': 'Username or Email exists' });
           } else {
+            var policyError = passwordpolicy.validate(req.body.password, { username: username, email: email });
+            if (policyError) {
+              return res.status(400).send({ 'status': 'error', 'error': policyError });
+            }
             const salt = bcrypt.genSaltSync();
             const hash = bcrypt.hashSync(req.body.password, salt);
 
@@ -1368,6 +1373,12 @@ router.route('/user/:id')
             id = null;
           }
         }
+        if (password != null) {
+          var policyError = passwordpolicy.validate(password, { username: req.body.username, email: req.body.email });
+          if (policyError) {
+            return res.status(400).send({ 'status': 'error', 'error': policyError });
+          }
+        }
         console.time('insert');
         db.from('users')
           .returning('id')
@@ -1386,6 +1397,11 @@ router.route('/user/:id')
               const salt = bcrypt.genSaltSync();
               const hash = bcrypt.hashSync(password, salt);
               userobj.password = hash
+              // An admin resetting a password is usually responding to a
+              // suspected compromise, so it has to evict the account's existing
+              // sessions the same way a self-service reset does - see
+              // middleware/sessionversion.js.
+              userobj.pwchangedat = Math.floor(Date.now() / 1000)
               if (id == null) {
                 userobj.lastlogondate = null
                 queryBuilder.insert(userobj)

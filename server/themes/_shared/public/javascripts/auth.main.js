@@ -12,6 +12,15 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                 Reset: $resource('/auth/reset/', null, {
                     'post': { method: 'POST', isArray: false }
                 }),
+                Forgot: $resource('/auth/forgot/', null, {
+                    'post': { method: 'POST', isArray: false }
+                }),
+                ResetPassword: $resource('/auth/reset-password/', null, {
+                    'post': { method: 'POST', isArray: false }
+                }),
+                VerifyEmail: $resource('/auth/verify-email/', null, {
+                    'post': { method: 'POST', isArray: false }
+                }),
                 UserDetail: $resource('/api/user/:id', { id: '@id' }, {
                     'post': { method: 'POST', isArray: false }
                 }),
@@ -67,8 +76,10 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             $scope.userLoading = true;
             if ($scope.user.username) {
                 Api.UsernameCheck.get({ id: $scope.user.username }, function (results) {
-                    console.log(results)
-                    if (results.username) {
+                    // The endpoint used to echo the matching row back; it now only
+                    // answers whether the value is taken, so that it cannot be used
+                    // to enumerate accounts.
+                    if (results.taken) {
                         $scope.userLoading = false;
                         $scope.existingUsername = true;
                         return true;
@@ -89,8 +100,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             $scope.userLoading = true;
             if ($scope.user.email) {
                 Api.UseremailCheck.get({ id: $scope.user.email }, function (results) {
-                    console.log(results)
-                    if (results.email) {
+                    if (results.taken) {
                         $scope.userLoading = false;
                         $scope.existingEmail = true;
                         return true;
@@ -152,11 +162,24 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
     .controller('ResetController', ['$scope', '$routeParams', 'Api', '$uibModal', '$filter', '$location', '$timeout', '$window', function ($scope, $routeParams, Api, $uibModal, $filter, $location, $timeout, $window) {
         $scope.resetMessage = {};
         $scope.resetSubmit = function () {
-            $scope.loading = false
-            var vars = { 'user': $scope.user, 'password': $scope.password };
+            // Belt and braces: the form's ui-validate already blocks submit on a
+            // mismatch, but the controller must not depend on that being present.
+            if ($scope.password !== $scope.confirm_password) {
+                $scope.resetMessage.text = 'The new passwords do not match';
+                $scope.resetMessage.type = 'alert-danger';
+                $scope.resetMessage.show = true;
+                return;
+            }
+            $scope.loading = true;
+            // currentpassword is required by the server - proving you know the
+            // existing password is what stops a stolen session taking the account.
+            var vars = {
+                'user': $scope.user,
+                'currentpassword': $scope.currentpassword,
+                'password': $scope.password
+            };
 
             Api.Reset.post(null, vars).$promise.then(function (response) {
-                console.log(response);
                 $scope.loading = false;
                 if (response.status == 'ok') {
                     $window.location.href = response.redirect
@@ -164,17 +187,94 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                     $scope.resetMessage.text = 'Failed to reset password: ' + response.data.error;
                     $scope.resetMessage.type = 'alert-danger';
                     $scope.resetMessage.show = true;
-                    $timeout(function () { $scope.resetMessage.show = false; }, 3000);
+                    $timeout(function () { $scope.resetMessage.show = false; }, 5000);
                 }
             }, function (response) {
-                console.log(response);
-                $scope.resetMessage.text = 'Failed to reset password: ' + response.data.error;
+                $scope.resetMessage.text = 'Failed to reset password: ' + ((response.data && response.data.error) || 'unknown error');
                 $scope.resetMessage.type = 'alert-danger';
                 $scope.resetMessage.show = true;
-                $timeout(function () { $scope.resetMessage.show = false; }, 3000);
+                $timeout(function () { $scope.resetMessage.show = false; }, 5000);
                 $scope.loading = false;
             });
         };
+    }])
+
+    .controller('ForgotController', ['$scope', 'Api', '$timeout', function ($scope, Api, $timeout) {
+        $scope.forgotMessage = {};
+        $scope.loading = false;
+        $scope.sent = false;
+
+        $scope.forgotSubmit = function () {
+            $scope.loading = true;
+            Api.Forgot.post(null, { email: $scope.email }).$promise.then(function (response) {
+                $scope.loading = false;
+                // The server answers identically whether or not the address is
+                // registered, so the UI must not imply that it found an account.
+                $scope.sent = true;
+                $scope.forgotMessage.text = response.message;
+                $scope.forgotMessage.type = 'alert-success';
+                $scope.forgotMessage.show = true;
+            }, function (response) {
+                $scope.loading = false;
+                $scope.forgotMessage.text = (response.data && response.data.error) || 'Something went wrong, please try again later';
+                $scope.forgotMessage.type = 'alert-danger';
+                $scope.forgotMessage.show = true;
+            });
+        };
+    }])
+
+    .controller('ResetPasswordController', ['$scope', '$routeParams', 'Api', '$timeout', '$window', function ($scope, $routeParams, Api, $timeout, $window) {
+        $scope.resetMessage = {};
+        $scope.loading = false;
+        $scope.done = false;
+        $scope.token = $routeParams.token;
+
+        $scope.resetSubmit = function () {
+            // Belt and braces: the form's ui-validate already blocks submit on a
+            // mismatch, but the controller must not depend on that being present.
+            if ($scope.password !== $scope.confirm_password) {
+                $scope.resetMessage.text = 'The passwords do not match';
+                $scope.resetMessage.type = 'alert-danger';
+                $scope.resetMessage.show = true;
+                return;
+            }
+            $scope.loading = true;
+            Api.ResetPassword.post(null, { token: $scope.token, password: $scope.password }).$promise.then(function (response) {
+                $scope.loading = false;
+                $scope.done = true;
+                $scope.resetMessage.text = 'Password updated. Redirecting you to the login page...';
+                $scope.resetMessage.type = 'alert-success';
+                $scope.resetMessage.show = true;
+                // Deliberately not logged in automatically - logging in proves the
+                // new password works.
+                $timeout(function () { $window.location.href = response.redirect; }, 2000);
+            }, function (response) {
+                $scope.loading = false;
+                $scope.resetMessage.text = (response.data && response.data.error) || 'Something went wrong, please try again';
+                $scope.resetMessage.type = 'alert-danger';
+                $scope.resetMessage.show = true;
+            });
+        };
+    }])
+
+    .controller('VerifyEmailController', ['$scope', '$routeParams', 'Api', '$timeout', '$window', function ($scope, $routeParams, Api, $timeout, $window) {
+        $scope.verifyMessage = {};
+        $scope.loading = true;
+
+        // Confirmed on load rather than behind a button: the user already
+        // expressed intent by requesting the change and clicking the link.
+        Api.VerifyEmail.post(null, { token: $routeParams.token }).$promise.then(function (response) {
+            $scope.loading = false;
+            $scope.verifyMessage.text = 'Your email address has been confirmed.';
+            $scope.verifyMessage.type = 'alert-success';
+            $scope.verifyMessage.show = true;
+            $timeout(function () { $window.location.href = response.redirect; }, 2000);
+        }, function (response) {
+            $scope.loading = false;
+            $scope.verifyMessage.text = (response.data && response.data.error) || 'That confirmation link is invalid or has expired';
+            $scope.verifyMessage.type = 'alert-danger';
+            $scope.verifyMessage.show = true;
+        });
     }])
 
     .controller('ProfileController', ['$scope', '$routeParams', 'Api', '$uibModal', '$filter', '$location', '$timeout', function ($scope, $routeParams, Api, $uibModal, $filter, $location, $timeout) {
@@ -183,12 +283,22 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         $scope.userSubmit = function () {
             $scope.loading = true;
             Api.Profile.save(null, $scope.user).$promise.then(function (response) {
-                console.log(response);
                 if (response.status == 'ok') {
-                    $scope.alertMessage.text = 'User saved!';
-                    $scope.alertMessage.type = 'alert-success';
-                    $scope.alertMessage.show = true;
-                    $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+                    if (response.emailPending) {
+                        // The address is not committed until the link in the
+                        // confirmation email is clicked, so say so rather than
+                        // reporting a plain save.
+                        $scope.user.pendingEmail = response.pendingEmail;
+                        $scope.alertMessage.text = 'Saved. Check ' + response.pendingEmail + ' for a link to confirm your new email address.';
+                        $scope.alertMessage.type = 'alert-warning';
+                        $scope.alertMessage.show = true;
+                        $timeout(function () { $scope.alertMessage.show = false; }, 8000);
+                    } else {
+                        $scope.alertMessage.text = 'User saved!';
+                        $scope.alertMessage.type = 'alert-success';
+                        $scope.alertMessage.show = true;
+                        $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+                    }
                     $scope.loading = false;
                 } else {
                     $scope.alertMessage.text = 'Error saving user: ' + response;
@@ -222,6 +332,13 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         });
     }])
 
+    // Server-side feature flags, handed over by the inline script in auth.ejs.
+    // The partials below are served as static files, so EJS cannot reach them.
+    .run(['$rootScope', function ($rootScope) {
+        var config = window.pagermonConfig || {};
+        $rootScope.passwordReset = config.passwordReset === true;
+    }])
+
     .config(['$routeProvider', '$locationProvider', '$httpProvider', function ($routeProvider, $locationProvider, $httpProvider) {
         $routeProvider
             .when('/login', {
@@ -239,6 +356,18 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             .when('/reset', {
                 templateUrl: '/templates/auth/reset.html',
                 controller: 'ResetController'
+            })
+            .when('/forgot', {
+                templateUrl: '/templates/auth/forgot.html',
+                controller: 'ForgotController'
+            })
+            .when('/reset-password/:token', {
+                templateUrl: '/templates/auth/resetPassword.html',
+                controller: 'ResetPasswordController'
+            })
+            .when('/verify-email/:token', {
+                templateUrl: '/templates/auth/verifyEmail.html',
+                controller: 'VerifyEmailController'
             });
         $httpProvider.defaults.headers.delete = { "Content-Type": "application/json;charset=utf-8" };
         $httpProvider.interceptors.push(function ($q, $location) {

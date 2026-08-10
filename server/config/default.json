@@ -11,6 +11,7 @@
     "searchLocation": "bottom",
     "theme": "default",
     "monitorName": "PagerMon",
+    "siteUrl": "",
     "faKey": "changeme"
   },
   "database": {
@@ -45,8 +46,23 @@
     "HideSource": false,
     "apiSecurity": false
   },
+  "mail": {
+    "enabled": false,
+    "host": "",
+    "port": 587,
+    "secure": false,
+    "requireTLS": true,
+    "rejectUnauthorized": true,
+    "username": "",
+    "password": "",
+    "fromAddress": "",
+    "fromName": "PagerMon"
+  },
   "auth": {
     "registration": false,
+    "passwordReset": false,
+    "passwordResetTTL": 60,
+    "minPasswordLength": 10,
     "user": "admin",
     "encPass": "$2a$08$De/aXnQkZIEbQ9p8J22tHuzLltqIbsAxE2CGgRMPLaaIwwHmVrpsu",
     "keys": [

@@ -4,6 +4,7 @@
 <% include global/header-admin.ejs %>
 <base href="/auth/">
 </head>
+<script>window.pagermonConfig = { passwordReset: <%= passwordReset === true %> };</script>
 <script src="/javascripts/auth.main.js"></script>
   <% include global/menu.ejs %>
 <% include global/banner.ejs %>

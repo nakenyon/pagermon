@@ -56,25 +56,112 @@ function init() {
             }
         })
     }
-    if(process.env.NODE_ENV != 'test') { 
+    if(process.env.NODE_ENV != 'test') {
         db.migrate.currentVersion().then((result) => {
             logger.main.info("Current DB version: " + result);
-            logger.main.info('Checking for database upgrades')
-            db.migrate.latest()
-            .then((result) => {
-                if (result[0] === 1) {
-                    logger.main.info('Database upgrades complete')
-                } else if (result[0] === 2) {
-                    logger.main.info('Database upgrade not required')
-                }
-            })
-            .catch((err) => {
-                logger.main.error('Error upgrading database:' + err)
-            })
         }).catch((err) => {
-            logger.main.error('Error retrieving database version' + err)
+            // Reporting the version is informational. It used to be the gate on
+            // the upgrade itself, so a transient SQLITE_BUSY here meant
+            // migrations were never even attempted - which is how one instance
+            // ended up running new code against an old schema.
+            logger.main.warn('Could not read current database version: ' + err);
+        }).then(() => {
+            logger.main.info('Checking for database upgrades')
+            return runMigrations()
         })
-    }   
+    }
+}
+
+// A pending schema upgrade that cannot be applied is not something to log and
+// move on from: the app then serves new code against an old schema, where reads
+// look healthy and writes fail on columns that were never added. So retry, and
+// only give up loudly.
+//
+// Two distinct failures both surface here as "locked":
+//
+//  * SQLITE_BUSY while taking the lock. sqlite permits one writer, and the
+//    connect-sqlite3 session store writes to the same database file during
+//    startup. busy_timeout (knexfile.js) deliberately does not help here -
+//    sqlite returns SQLITE_BUSY immediately, ignoring the timeout, when a
+//    transaction that has already read tries to upgrade to a write while
+//    another connection holds one. Retrying from scratch is the only fix.
+//  * "Migration table is already locked" - knex_migrations_lock still set by a
+//    process killed mid-migration, which never clears itself.
+//
+// The first resolves by waiting. The second never does, so after waiting once
+// the lock is treated as stale and cleared.
+var MIGRATION_RETRIES = 3;
+
+function runMigrations(attempt) {
+    var tries = attempt || 1;
+
+    return db.migrate
+        .latest()
+        .then(reportMigrations)
+        .catch((err) => {
+            var message = String((err && err.message) || err);
+            var staleLock = message.indexOf('already locked') !== -1;
+            var busy = message.indexOf('SQLITE_BUSY') !== -1 || message.indexOf('database is locked') !== -1;
+
+            if (!staleLock && !busy) return migrationFailed(err);
+
+            if (tries < MIGRATION_RETRIES) {
+                // Waiting also covers the legitimate case of a second instance
+                // against a shared MySQL database being mid-migration; stealing
+                // the lock from it would run two migrations at once.
+                logger.main.warn(
+                    'Database migration blocked (' +
+                        (busy ? 'database busy' : 'lock held') +
+                        ') - retrying in 10s, attempt ' +
+                        tries +
+                        ' of ' +
+                        MIGRATION_RETRIES
+                );
+                return new Promise((resolve) => setTimeout(resolve, 10000)).then(() =>
+                    runMigrations(tries + 1)
+                );
+            }
+
+            if (staleLock) {
+                logger.main.warn(
+                    'Migration lock still held after ' +
+                        MIGRATION_RETRIES +
+                        ' attempts - treating it as stale (left by a process killed mid-migration) and clearing it'
+                );
+                return db.migrate
+                    .forceFreeMigrationsLock()
+                    .then(() => db.migrate.latest())
+                    .then(reportMigrations)
+                    .catch((retryErr) => migrationFailed(retryErr));
+            }
+
+            return migrationFailed(err);
+        });
+}
+
+// knex resolves migrate.latest() to [batchNumber, appliedMigrationNames]. The
+// previous code read result[0] as a status code - comparing the batch number
+// against 1 and 2 - so an upgrade applied in batch 3 or later logged nothing at
+// all, and a database that was already current but on batch 1 claimed to have
+// upgraded. Report on the list of files actually applied instead.
+function reportMigrations(result) {
+    var applied = (result && result[1]) || [];
+    if (applied.length) {
+        logger.main.info('Database upgrades complete: applied ' + applied.join(', '));
+    } else {
+        logger.main.info('Database upgrade not required');
+    }
+}
+
+// A migration that cannot be applied leaves the schema behind the code, so make
+// it impossible to miss rather than a single line among the boot noise.
+function migrationFailed(err) {
+    logger.main.error('************************************************************');
+    logger.main.error('DATABASE UPGRADE FAILED: ' + err);
+    logger.main.error('The application is running against an out-of-date schema.');
+    logger.main.error('Expect errors when saving users, messages or settings.');
+    logger.main.error('Fix the error above and restart to complete the upgrade.');
+    logger.main.error('************************************************************');
 }
 
 module.exports = {

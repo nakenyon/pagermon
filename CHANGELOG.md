@@ -1,3 +1,47 @@
+# 2026.8.11
+
+Fixes two problems in 2026.8.10.
+
+**Schema upgrades could be skipped silently, breaking user management.** On a
+busy host the 2026.8.10 migration could fail at boot with `SQLITE_BUSY:
+database is locked`, and the failure was only logged - so the server carried on
+running new code against the old schema. Reads looked fine; adding or editing a
+user failed with `table users has no column named pwchangedat`.
+
+The contention comes from the `connect-sqlite3` session store opening the *same*
+database file as the application and writing its sessions table during startup.
+Three changes:
+
+* `busy_timeout` of 15s on sqlite connections, so ordinary writes wait for a
+  brief lock instead of failing instantly. This helps message ingest generally.
+  It deliberately does not rescue the migration lock: sqlite returns
+  `SQLITE_BUSY` immediately, ignoring the timeout, when a transaction that has
+  already read tries to upgrade to a write while another connection holds one.
+* Migrations now retry (3 attempts, 10s apart) on either `SQLITE_BUSY` or a
+  `knex_migrations_lock` row left set by a process killed mid-migration, which
+  never clears itself. After the retries a held lock is treated as stale and
+  cleared. A migration that still cannot be applied is logged as a prominent
+  block rather than one line.
+* Reading the current DB version is no longer a gate on running migrations. A
+  transient error there previously meant the upgrade was never attempted at all.
+
+Upgrade note: if you are already on 2026.8.10 and hit this, restarting on
+2026.8.11 applies the pending migration. No manual database work is needed.
+
+Migration logging was also wrong: it read knex's *batch number* as a status
+code, so an upgrade applied in batch 3 or later logged nothing. It now names the
+migrations it applied.
+
+**Dark themes: form inputs were nearly invisible.** Bootswatch "paper" draws an
+input as a 1px `#666666` underline image with no border and a transparent
+background, which all but disappears against the dark themes' `#373737` - and
+its focused state is `#212121`, darker than the page. Inputs in the Dark and
+Compact Dark themes now have a real bordered box. This affected every form in
+those themes, not just the new password pages.
+
+`login.html` joins `themes/_shared` - the dark copies differed only by inline
+`color:white` overrides that the stylesheet now handles.
+
 # 2026.8.10
 
 **Self-service password reset.** Users can recover their own account from an

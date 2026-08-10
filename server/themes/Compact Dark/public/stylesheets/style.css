@@ -524,4 +524,87 @@ body {
         margin-left: 15px;
         padding-right: 30px;
     }
+
+/* Form inputs.
+ *
+ * Bootswatch "paper" draws an input as a 1px #666666 underline supplied as a
+ * background-image PNG, with a transparent background and no border. Against
+ * this theme's #373737 that underline is all but invisible, and paper's focused
+ * variant swaps it for #212121 - darker than the page itself. The result was
+ * text floating with no discernible field, on every form in the dark themes.
+ *
+ * Give inputs a real box instead. The selector list mirrors paper's own
+ * (input.form-control, input[type=...], [type=...].form-control) because its
+ * focus and reset rules are more specific than a bare .form-control, so a
+ * simpler selector here loses to them regardless of load order. Paper also
+ * zeroes the horizontal padding, which assumes there is no border to sit
+ * inside, so that is restored too.
+ */
+.form-control,
+input.form-control,
+textarea.form-control,
+select.form-control,
+input[type=text],
+input[type=password],
+input[type=email],
+input[type=number],
+input[type=search],
+[type=text].form-control,
+[type=password].form-control,
+[type=email].form-control,
+[type=tel].form-control,
+textarea,
+select {
+    background-image: none;
+    background-color: #2b2b2b;
+    border: 1px solid #6f6f6f;
+    border-radius: 3px;
+    padding-left: 10px;
+    padding-right: 10px;
+    color: white;
+}
+
+.form-control:focus,
+input.form-control:focus,
+textarea.form-control:focus,
+select.form-control:focus,
+input[type=text]:focus,
+input[type=password]:focus,
+input[type=email]:focus,
+input[type=number]:focus,
+input[type=search]:focus,
+[type=text].form-control:focus,
+[type=password].form-control:focus,
+[type=email].form-control:focus,
+[type=tel].form-control:focus,
+textarea:focus,
+select:focus {
+    background-image: none;
+    background-color: #2b2b2b;
+    border-color: #f85959;
+    -webkit-box-shadow: none;
+    box-shadow: none;
+    outline: 0;
+}
+
+.form-control::-webkit-input-placeholder { color: #9a9a9a; }
+.form-control::-moz-placeholder { color: #9a9a9a; }
+.form-control:-ms-input-placeholder { color: #9a9a9a; }
+.form-control::placeholder { color: #9a9a9a; }
+
+.form-control[disabled], fieldset[disabled] .form-control,
+input.form-control[disabled], input[type=text][disabled] {
+    background-color: #444444;
+    border-color: #5e5e5e;
+    border-bottom: 1px solid #5e5e5e;
+    color: #bababa;
+}
+
+/* btn-link inherits a dark link colour that disappears against the dark page. */
+.btn-link {
+    color: #f85959;
+}
+
+.btn-link:hover, .btn-link:focus {
+    color: #ff8a8a;
 }

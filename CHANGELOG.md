@@ -1,3 +1,30 @@
+# 2026.8.12
+
+**The forgot-password and set-new-password forms did not work at all.** Entering
+an email and clicking *Send reset link* returned "Email address is required";
+submitting a new password from an emailed link would have failed the same way.
+Self-service password reset was unusable in a browser from the moment it shipped
+in 2026.8.10.
+
+Both forms are wrapped in an `ng-if`, which in AngularJS creates a **child
+scope**. `ng-model="email"` inside one writes `email` onto that child instead of
+updating the controller's property, so the controller read `undefined` and sent
+an empty body. The forms now bind through an object (`data.email`,
+`data.password`) - the standard "always have a dot" rule - so the write reaches
+the object the controller owns. The logged-in change-password form was moved to
+the same pattern; it worked only because nothing happened to create a scope
+around it.
+
+Every test for this feature drove the API directly, with curl or chai-http, and
+so never exercised the Angular layer where the bug lived. Added:
+
+* a template test that fails on a dotless `ng-model` underneath an
+  `ng-if`/`ng-repeat`/`ng-switch`, and on a `ui-validate` comparison left
+  pointing at a bare property. It flags only that combination, so the
+  long-standing admin templates whose dotless bindings are safe are not churned.
+* the three forms are now also verified in a real browser (typing, clicking,
+  asserting what the page shows) before release.
+
 # 2026.8.11
 
 Fixes two problems in 2026.8.10.

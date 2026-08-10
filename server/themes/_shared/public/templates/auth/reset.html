@@ -14,21 +14,26 @@
       <form ng-submit="resetSubmit()" name="form">
         <!-- The server requires the current password: without it, anyone who
              gets hold of a live session could take the account permanently. -->
+        <!-- Bound through the `data` object rather than bare primitives. This
+             form has no ng-if today, so it would work either way, but any
+             directive that introduces a child scope (ng-if, ng-repeat,
+             ng-switch) would silently break the binding - as it did on the
+             forgot and reset-password forms. -->
         <div class="form-group">
           <label for="currentpassword">Current Password:</label>
           <input type="password" class="form-control" id="currentpassword" name="currentpassword"
-            ng-model="currentpassword" autocomplete="current-password" autofocus=true required>
+            ng-model="data.currentpassword" autocomplete="current-password" autofocus=true required>
         </div>
         <div class="form-group">
           <label for="password">New Password:</label>
-          <input type="password" class="form-control" id="password" name="password" ng-model="password"
+          <input type="password" class="form-control" id="password" name="password" ng-model="data.password"
             autocomplete="new-password" required>
         </div>
         <div class="form-group">
           <label for="confirm_password">Confirm New Password:</label>
           <input type="password" class="form-control" id="confirm_password" name="confirm_password"
-            ng-model="confirm_password" autocomplete="new-password" required ui-validate=" '$value==password' "
-            ui-validate-watch=" 'password' ">
+            ng-model="data.confirm_password" autocomplete="new-password" required
+            ui-validate=" '$value==data.password' " ui-validate-watch=" 'data.password' ">
           <span class="text-danger" ng-show='form.confirm_password.$error.validator'>Passwords do not match!</span>
         </div>
         <button ng-disabled="loading || form.confirm_password.$error.validator" type="submit"

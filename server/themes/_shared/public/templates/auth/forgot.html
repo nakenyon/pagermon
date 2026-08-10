@@ -23,7 +23,12 @@
         <p>Enter the email address on your account and we will send you a link to set a new password.</p>
         <div class="form-group">
           <label for="email">Email address:</label>
-          <input type="email" class="form-control" id="email" name="email" ng-model="email" autofocus=true required>
+          <!-- Bound through the `data` object, not a bare `email`. The ng-if on
+               this form creates a child scope, and writing to a bare primitive
+               there shadows the controller's copy instead of updating it - the
+               controller would always read undefined. -->
+          <input type="email" class="form-control" id="email" name="email" ng-model="data.email" autofocus=true
+            required>
         </div>
         <button type="submit" class="btn btn-default" ng-disabled="loading || form.$invalid">Send reset link</button>
         <a href="/auth/login" class="btn btn-link">Back to login</a>

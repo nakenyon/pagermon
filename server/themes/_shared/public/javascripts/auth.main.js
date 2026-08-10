@@ -161,10 +161,16 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
 
     .controller('ResetController', ['$scope', '$routeParams', 'Api', '$uibModal', '$filter', '$location', '$timeout', '$window', function ($scope, $routeParams, Api, $uibModal, $filter, $location, $timeout, $window) {
         $scope.resetMessage = {};
+        // Form fields live on an object, never directly on the scope: any
+        // directive that creates a child scope (ng-if, ng-repeat, ng-switch)
+        // would otherwise have ng-model write to the child and leave the value
+        // read here undefined.
+        $scope.data = {};
+
         $scope.resetSubmit = function () {
             // Belt and braces: the form's ui-validate already blocks submit on a
             // mismatch, but the controller must not depend on that being present.
-            if ($scope.password !== $scope.confirm_password) {
+            if ($scope.data.password !== $scope.data.confirm_password) {
                 $scope.resetMessage.text = 'The new passwords do not match';
                 $scope.resetMessage.type = 'alert-danger';
                 $scope.resetMessage.show = true;
@@ -175,8 +181,8 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             // existing password is what stops a stolen session taking the account.
             var vars = {
                 'user': $scope.user,
-                'currentpassword': $scope.currentpassword,
-                'password': $scope.password
+                'currentpassword': $scope.data.currentpassword,
+                'password': $scope.data.password
             };
 
             Api.Reset.post(null, vars).$promise.then(function (response) {
@@ -203,10 +209,14 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         $scope.forgotMessage = {};
         $scope.loading = false;
         $scope.sent = false;
+        // On an object, not the scope directly - the form is inside an ng-if,
+        // which creates a child scope, so a bare ng-model would write there and
+        // this controller would only ever see undefined.
+        $scope.data = {};
 
         $scope.forgotSubmit = function () {
             $scope.loading = true;
-            Api.Forgot.post(null, { email: $scope.email }).$promise.then(function (response) {
+            Api.Forgot.post(null, { email: $scope.data.email }).$promise.then(function (response) {
                 $scope.loading = false;
                 // The server answers identically whether or not the address is
                 // registered, so the UI must not imply that it found an account.
@@ -228,18 +238,22 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         $scope.loading = false;
         $scope.done = false;
         $scope.token = $routeParams.token;
+        // On an object, not the scope directly - the form is inside an ng-if,
+        // which creates a child scope, so a bare ng-model would write there and
+        // this controller would only ever see undefined.
+        $scope.data = {};
 
         $scope.resetSubmit = function () {
             // Belt and braces: the form's ui-validate already blocks submit on a
             // mismatch, but the controller must not depend on that being present.
-            if ($scope.password !== $scope.confirm_password) {
+            if ($scope.data.password !== $scope.data.confirm_password) {
                 $scope.resetMessage.text = 'The passwords do not match';
                 $scope.resetMessage.type = 'alert-danger';
                 $scope.resetMessage.show = true;
                 return;
             }
             $scope.loading = true;
-            Api.ResetPassword.post(null, { token: $scope.token, password: $scope.password }).$promise.then(function (response) {
+            Api.ResetPassword.post(null, { token: $scope.token, password: $scope.data.password }).$promise.then(function (response) {
                 $scope.loading = false;
                 $scope.done = true;
                 $scope.resetMessage.text = 'Password updated. Redirecting you to the login page...';

@@ -604,3 +604,44 @@ input.form-control[disabled], input[type=text][disabled] {
 .btn-link:hover, .btn-link:focus {
     color: #ff8a8a;
 }
+
+/* Homepage search field.
+ *
+ * The bordered box above is what forms need on a dark background, but applying
+ * it to every input also swallowed the homepage search bar, which reads better
+ * as paper's original underline - it sits over the message list rather than in
+ * a form, and a full box competes with the table below it. Keep the underline
+ * here only.
+ *
+ * #8a8a8a rather than paper's #666666: the same reason the box exists at all is
+ * that #666666 is nearly invisible against this theme's background.
+ *
+ * Specificity has to clear the block above, whose selectors include
+ * input[type=text] (0,0,1) and .form-control (0,1,0); the compound selectors
+ * below beat both, and order alone would not be enough for the bare class.
+ */
+.search-input.form-control,
+input.search-input,
+input[type=text].search-input {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-bottom: 1px solid #8a8a8a;
+    border-radius: 0;
+    padding-left: 0;
+    padding-right: 0;
+    -webkit-box-shadow: none;
+    box-shadow: none;
+}
+
+.search-input.form-control:focus,
+input.search-input:focus,
+input[type=text].search-input:focus {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-bottom: 1px solid #f85959;
+    -webkit-box-shadow: none;
+    box-shadow: none;
+    outline: 0;
+}

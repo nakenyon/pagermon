@@ -1,3 +1,49 @@
+# 2026.8.14
+
+**SMTP no longer sends your password over an unencrypted connection.** The
+plugin disabled certificate validation outright and never insisted on TLS, which
+mattered little on port 465, where the socket is encrypted from the first byte.
+It matters a great deal on 587, where the session opens in plaintext and only
+upgrades if the server offers STARTTLS: anyone positioned to intercept that
+connection could strip the upgrade and read the credentials in the clear.
+
+The transport now sets `requireTLS` and validates the server certificate. For an
+internal relay with a self-signed certificate there is a new **Allow Self-Signed
+Certificates** checkbox in the plugin settings.
+
+*Upgrade note:* if you point PagerMon at a mail server with a self-signed or
+otherwise untrusted certificate, sending will start failing on this release until
+you enable that checkbox. Every publicly trusted provider is unaffected.
+
+This came out of chasing `SMTP:Error: Connection timeout`, which turned out not
+to be a PagerMon fault at all - the network was blocking outbound 465 and 25. If
+you see that error, check port reachability before your credentials; port 587
+with *Enable SSL/TLS* switched off is the configuration to prefer.
+
+**The homepage search bar is back to an underline.** The dark-theme input fix in
+2026.8.11 gave every input a bordered box, and its selector list caught the
+homepage search field along with the login and admin forms it was aimed at. The
+search field is styled on its own now and keeps the lighter underline treatment;
+forms keep their boxes.
+
+**Search and pagination can appear at both ends of the message list.** Pagination
+now renders above *and* below the list in every theme - previously Compact Dark
+had it only at the top and the other themes only at the bottom. The *Homepage
+Search Bar Location* setting takes a new **Both** value alongside Top and Bottom.
+
+Consolidating the search form into a single partial per theme fixed two faults
+that had been hiding in the hand-copied duplicates:
+
+* the bottom copy called a misspelled `clearSeaarch()`, so its clear button did
+  nothing at all. Only installs with the search bar at the bottom were affected.
+* Compact Dark rendered the bottom search block twice, giving two stacked search
+  bars.
+
+**Stylesheets are version-stamped in every theme.** 2026.8.13 stamped the SPA
+bundles and partials, and stamped `style.css` in Compact Dark only. The other
+three themes linked it unstamped, so a cached stylesheet could survive an
+upgrade indefinitely behind a CDN - including the search bar change above.
+
 # 2026.8.13
 
 **Upgrades no longer need a hard refresh.** The 2026.8.12 fix was correct on the

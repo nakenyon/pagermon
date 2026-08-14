@@ -47,7 +47,13 @@
         {
             "name": "secure",
             "label": "Enable SSL/TLS",
-            "description": "Enable secure mail transport",
+            "description": "Enable secure mail transport. Use for implicit TLS ports such as 465; leave off for port 587, which upgrades to TLS via STARTTLS.",
+            "type": "checkbox"
+        },
+        {
+            "name": "allowSelfSigned",
+            "label": "Allow Self-Signed Certificates",
+            "description": "Skip certificate validation for the mail server. Only enable for an internal relay using a self-signed certificate - it allows anyone who can intercept the connection to read your SMTP password.",
             "type": "checkbox"
         }
     ],

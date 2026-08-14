@@ -1,0 +1,24 @@
+<%
+  // The search form is rendered above the message list, below it, or both,
+  // depending on the "Homepage Search Bar Location" setting. It lived as two
+  // hand-copied blocks per theme before this partial, which is how the bottom
+  // copy came to call a misspelled clearSeaarch() that silently did nothing.
+  //
+  // searchPos ('top' or 'bottom') is set by the caller and only keeps the id
+  // unique when both copies are on the page - nothing reads these ids. Both
+  // copies bind ng-model="query", so typing in one updates the other.
+%>
+<div class="row">
+  <div class="col-xs-offset-1 col-xs-10">
+  <form action="/" method="get">
+    <div class="input-group">
+      <input id="query-<%= searchPos %>" type="text" class="form-control search-input" name="q" placeholder="Search" ng-model="query">
+      <span class="input-group-btn">
+        <button type="submit" class="btn btn-default" ng-disabled="!query" ng-class="{disabledLink: !query}"><i class="fa fa-fw fa-search"></i></button>
+        <button ng-if="!hasQuery" ng-click="clearSearch()" class="btn btn-default" ng-class="{disabledLink: !query}" ng-disabled="!query"><i class="fa fa-fw fa-times"></i></button>
+        <a ng-href="/" ng-if="hasQuery" class="btn btn-default"><i class="fa fa-fw fa-times"></i></a>
+      </span>
+    </div>
+  </form>
+  </div>
+</div>

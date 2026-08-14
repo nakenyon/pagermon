@@ -7,14 +7,21 @@ function run(trigger, scope, data, config, callback) {
         let smtpConfig = {
             host: config.server,
             port: config.port,
-            secure: config.secure, // upgrade later with STARTTLS
+            secure: config.secure,
+            // On a non-secure port the session opens in plaintext and upgrades
+            // with STARTTLS, so without this a server that fails to offer the
+            // upgrade would be handed the password in the clear. Ignored when
+            // secure is set, since the socket is already TLS from the start.
+            requireTLS: true,
+            tls: {
+              // Certificate validation is the only thing standing between
+              // STARTTLS and a downgrade, so it stays on unless the operator
+              // opts out for an internal relay with a self-signed cert.
+              rejectUnauthorized: !config.allowSelfSigned
+            },
             auth: {
               user: config.username,
               pass: config.password
-            },
-            tls: {
-              // do not fail on invalid certs
-              rejectUnauthorized: false
             }
         };
         let transporter = nodemailer.createTransport(smtpConfig,[])

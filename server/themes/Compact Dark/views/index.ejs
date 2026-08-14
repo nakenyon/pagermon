@@ -54,21 +54,16 @@
   <div ng-show="loading" class="loading"><i class="fa fa-radiation fa-spin"></i></div>
     <p></p>
     <div class="row">
-      <% if (searchLocation === 'top') { %>
-        <div class="row">
-          <div class="col-xs-offset-1 col-xs-10">
-          <form action="/" method="get">
-            <div class="input-group">
-              <input  id="query" type="text" class="form-control" name="q" placeholder="Search" ng-model="query">
-              <span class="input-group-btn">
-                <button type="submit" class="btn btn-default" ng-disabled="!query" ng-class="{disabledLink: !query}"><i class="fa fa-fw fa-search"></i></button>
-                <button ng-if="!hasQuery" ng-click="clearSearch()" class="btn btn-default" ng-class="{disabledLink: !query}" ng-disabled="!query"><i class="fa fa-fw fa-times"></i></button>
-                <a ng-href="/" ng-if="hasQuery" class="btn btn-default"><i class="fa fa-fw fa-times"></i></a>
-              </span>
-            </div>
-          </form>
-          </div>
-        </div>
+      <%
+        // Unset on installs predating the setting, where the search bar sat at
+        // the bottom - keep that as the default rather than letting the strict
+        // comparisons below silently drop it off the page entirely.
+        var searchAt = (typeof searchLocation == 'undefined') ? 'bottom' : searchLocation;
+        var searchTop = (searchAt === 'top' || searchAt === 'both');
+        var searchBottom = (searchAt === 'bottom' || searchAt === 'both');
+      %>
+      <% if (searchTop) { var searchPos = 'top'; %>
+        <% include global/search.ejs %>
       <% } %>
       <% include global/pagination.ejs %>
       <table >
@@ -216,38 +211,10 @@
       </div>
       </div>
     </div>
-    <% if (searchLocation === 'bottom' || typeof searchLocation == 'undefined') { %>
-      <div class="row">
-        <div class="col-xs-offset-1 col-xs-10">
-        <form action="/" method="get">
-          <div class="input-group">
-            <input  id="query" type="text" class="form-control" name="q" placeholder="Search" ng-model="query">
-            <span class="input-group-btn">
-              <button type="submit" class="btn btn-default" ng-disabled="!query" ng-class="{disabledLink: !query}"><i class="fa fa-fw fa-search"></i></button>
-              <button ng-if="!hasQuery" ng-click="clearSeaarch()" class="btn btn-default" ng-class="{disabledLink: !query}" ng-disabled="!query"><i class="fa fa-fw fa-times"></i></button>
-              <a ng-href="/" ng-if="hasQuery" class="btn btn-default"><i class="fa fa-fw fa-times"></i></a>
-            </span>
-          </div>
-        </form>
-        </div>
-      </div>
+    <% if (searchBottom) { var searchPos = 'bottom'; %>
+      <% include global/search.ejs %>
     <% } %>
-<% if (searchLocation === 'bottom' || typeof searchLocation == 'undefined') { %>
-<div class="row">
-<div class="col-xs-offset-1 col-xs-10">
-<form action="/" method="get">
-<div class="input-group">
-<input  id="query" type="text" class="form-control" name="q" placeholder="Search" ng-model="query">
-<span class="input-group-btn">
-<button type="submit" class="btn btn-default" ng-disabled="!query" ng-class="{disabledLink: !query}"><i class="fa fa-fw fa-search"></i></button>
-<button ng-if="!hasQuery" ng-click="clearSeaarch()" class="btn btn-default" ng-class="{disabledLink: !query}" ng-disabled="!query"><i class="fa fa-fw fa-times"></i></button>
-<a ng-href="/" ng-if="hasQuery" class="btn btn-default"><i class="fa fa-fw fa-times"></i></a>
-</span>
-</div>
-</form>
-</div>
-</div>
-    <% } %>
+    <% include global/pagination.ejs %>
 
   </div>
   </script>

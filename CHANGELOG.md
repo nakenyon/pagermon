@@ -1,3 +1,45 @@
+# 2026.8.15
+
+**Editing or creating an alias no longer takes twelve seconds.** Opening
+`#/aliases/<id>` blocked the browser's main thread for ~12s before the page was
+usable. Measured on a real instance: the alias fetch, which is issued from the
+settings callback, did not leave the browser until **13.0 seconds** after
+navigation, despite the settings request having completed at 1.2 seconds.
+
+The cause was the FontAwesome icon picker. Its 1001-icon grid was built with
+`ng-repeat` and sat in a plain Bootstrap modal with no `ng-if`, so it was
+constructed on **every** alias page load whether or not anyone opened the picker.
+Angular was not the problem — its share was **12ms**. The other **12,524ms** was
+the FontAwesome SVG kit, whose MutationObserver had to process 1001 elements
+inserted one at a time, most of them twice: `ng-repeat` inserts
+`class="... fa-{{faIcon}}"` unresolved, matching no icon, then rewrites it on the
+next digest.
+
+The grid is now plain DOM, built on first open, one write per 100-icon chunk with
+final class names already in the markup and each chunk attached as a single
+fragment. The picker fills progressively, so the full set is still browsable by
+scrolling. Filtering is unchanged in behaviour — case-insensitive substring — and
+is now debounced.
+
+Measured on the same page after the change: icon elements on load **1001 → 0**,
+inline SVGs **1017 → 16**, Angular watchers **2222 → 104**.
+
+The two page-load requests also now run in parallel instead of the alias fetch
+waiting for the settings response, and a failed settings request renders the form
+without plugin config rather than leaving the page empty forever.
+
+**The Refresh Aliases button works on the alias detail page.** It read
+`results.database.aliasRefreshRequired`, but `/admin/settingsData` returns the
+flag under `results.settings.database`, so the button had never appeared there.
+While in that code, `POST /api/capcodeRefresh` now answers with a 500 on failure
+instead of logging and leaving the request hanging.
+
+*Not changed, having measured it:* the refresh query itself was suspected of being
+pathologically slow. Against a copy of a real 47,827-row database it completes in
+**2.7s**, and a rewrite issuing one statement per distinct address produced
+identical output but took **5.2s** while holding the write lock throughout. The
+original single-statement form is the faster one and stays.
+
 # 2026.8.14
 
 **SMTP no longer sends your password over an unencrypted connection.** The

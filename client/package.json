@@ -1,6 +1,6 @@
 {
   "name": "pagermon-client",
-  "version": "2026.8.14",
+  "version": "2026.8.15",
   "description": "",
   "main": "reader.js",
   "dependencies": {

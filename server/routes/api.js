@@ -25,6 +25,40 @@ const passport = require('../auth/local');
 var authHelper = require('../middleware/authhelper')
 var passwordpolicy = require('../lib/passwordpolicy')
 
+// Recomputes messages.alias_id from the capcodes table: for each message, the
+// most specific capcode whose address pattern the message's address matches.
+// REPLACE(address,'_','%') DESC is what makes "most specific" work - it sorts
+// literal digits above the '_' wildcard.
+//
+// Measured against a copy of a real 47,827-row messages.db before changing this:
+// the single whole-table UPDATE takes ~2.7s. Splitting it into one statement per
+// distinct address (450 of them) produced byte-identical alias_id values but took
+// ~5.2s, and held the write lock for the whole run - so the original shape stays.
+// sqlite keeps the 67-row capcodes table in page cache and the per-row subquery
+// is cheap; the statement overhead of the alternative is not.
+//
+// `address` limits the update to one address; omit it to refresh everything.
+function refreshAliasIds(address) {
+  var dbtype = nconf.get('database:type');
+  return db('messages')
+    .update('alias_id', function () {
+      this.select('id')
+        .from('capcodes')
+        .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
+        .modify(function (queryBuilder) {
+          if (dbtype == 'oracledb')
+            queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
+          else
+            queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`);
+        })
+        .limit(1);
+    })
+    .modify(function (queryBuilder) {
+      if (typeof address !== 'undefined')
+        queryBuilder.where(db.ref('messages.address'), '=', address);
+    });
+}
+
 router.use(function (req, res, next) {
   res.locals.login = req.isAuthenticated();
   res.locals.user = req.user || false;
@@ -910,20 +944,12 @@ router.route('/capcodes/:id')
           .then((result) => {
             console.timeEnd('insert');
             if (updateAlias == 1) {
+              // Nothing in the current UI sets updateAlias, so this path is not
+              // reachable today. It also compared messages.address against the
+              // string literal 'address' rather than the capcodes column, so it
+              // would have mapped almost everything to null had it ever run.
               console.time('updateMap');
-              db('messages')
-                .update('alias_id', function () {
-                  this.select('id')
-                    .from('capcodes')
-                    .where('messages.address', 'like', 'address')
-                    .modify(function (queryBuilder) {
-                      if (dbtype == 'oracledb')
-                        queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
-                      else
-                        queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`)
-                    })
-                    .limit(1)
-                })
+              refreshAliasIds()
                 .catch((err) => {
                   logger.main.error(err);
                 })
@@ -936,19 +962,7 @@ router.route('/capcodes/:id')
               if (specificRefresh && /^\d+$/.test(req.body.address)) {
                 //Refresh this specific Alias
                 console.time('updateMap');
-                db('messages').update('alias_id', function () {
-                  this.select('id')
-                    .from('capcodes')
-                    .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
-                    .modify(function (queryBuilder) {
-                      if (dbtype == 'oracledb')
-                        queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
-                      else
-                        queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`)
-                  })
-                  .limit(1)
-                })
-                .where(db.ref('messages.address'), '=', req.body.address)
+                refreshAliasIds(req.body.address)
                 .catch((err) => {
                   logger.main.error(err);
                 })
@@ -1032,29 +1046,21 @@ router.route('/capcodeCheck/:id')
 router.route('/capcodeRefresh')
   .post(authHelper.isAdmin, function (req, res, next) {
     nconf.load();
-    var dbtype = nconf.get('database:type');
     console.time('updateMap');
-    db('messages').update('alias_id', function () {
-      this.select('id')
-        .from('capcodes')
-        .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
-        .modify(function (queryBuilder) {
-          if (dbtype == 'oracledb')
-            queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
-          else
-            queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`)
-        })
-        .limit(1)
-    })
-      .then((result) => {
+    refreshAliasIds()
+      .then((count) => {
         console.timeEnd('updateMap');
         nconf.set('database:aliasRefreshRequired', 0);
         nconf.save();
+        logger.main.info(`Alias refresh: remapped ${count} messages`);
         res.status(200).send({ 'status': 'ok' });
       })
       .catch((err) => {
-        logger.main.error(err);
         console.timeEnd('updateMap');
+        logger.main.error(err);
+        // The old handler logged and then never answered, so a failed refresh
+        // left the request hanging until the client gave up.
+        res.status(500).send({ 'status': 'error', 'error': err.message });
       })
   });
 

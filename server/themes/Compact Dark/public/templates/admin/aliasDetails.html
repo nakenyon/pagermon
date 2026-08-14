@@ -10,11 +10,11 @@
         </button>
         <div class="input-group">
           <span class="input-group-addon"><i class="glyphicon glyphicon-filter"></i></span>
-          <input id="faSearch" type="text" class="form-control" name="faSearch" placeholder="Filter" ng-model="faSearch">
+          <input id="faSearch" type="text" class="form-control" name="faSearch" placeholder="Filter">
         </div>
       </div>
       <div class="modal-body" style="overflow-y: auto;height: calc(100vh - 215px);" id="faHelperBody">
-        <div ng-repeat="faIcon in faIcons | filter: faSearch" class="faHelperBlock" title="{{faIcon}}" onclick="setFaIcon(this);" onmouseover="showFaName(this);" onmouseleave="document.getElementById('faPreview').innerText = '';" data-dismiss="modal"><i class="faHelperIcon fas fa-{{faIcon}}"></i></div>
+        <div id="faHelperGrid"></div>
       </div>
       <div class="modal-footer">
         <span id="faPreview" style="font-size:16px;padding-right: 15px;" class="modal-title"></span>
@@ -212,14 +212,14 @@
 <script>
   //FontAwesome Helper Set Function
   function setFaIcon(element){
-    var iconName = angular.element(element).scope().faIcon;
+    var iconName = element.getAttribute('data-icon');
     document.getElementById('aliasIcon').value = iconName;
     angular.element(document.getElementById('aliasIcon')).triggerHandler('change');
   }
 
   //FontAwesome Helper Preview Function
   function showFaName(element){
-    document.getElementById('faPreview').innerText = angular.element(element).scope().faIcon;
+    document.getElementById('faPreview').innerText = element.getAttribute('data-icon');
   }
 
   //Alias Template Set Function

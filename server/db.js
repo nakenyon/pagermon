@@ -57,7 +57,7 @@ function init() {
         })
     }
     if(process.env.NODE_ENV != 'test') {
-        db.migrate.currentVersion().then((result) => {
+        return db.migrate.currentVersion().then((result) => {
             logger.main.info("Current DB version: " + result);
         }).catch((err) => {
             // Reporting the version is informational. It used to be the gate on
@@ -70,6 +70,7 @@ function init() {
             return runMigrations()
         })
     }
+    return Promise.resolve(true);
 }
 
 // A pending schema upgrade that cannot be applied is not something to log and
@@ -151,6 +152,7 @@ function reportMigrations(result) {
     } else {
         logger.main.info('Database upgrade not required');
     }
+    return true;
 }
 
 // A migration that cannot be applied leaves the schema behind the code, so make
@@ -162,6 +164,7 @@ function migrationFailed(err) {
     logger.main.error('Expect errors when saving users, messages or settings.');
     logger.main.error('Fix the error above and restart to complete the upgrade.');
     logger.main.error('************************************************************');
+    return false;
 }
 
 module.exports = {

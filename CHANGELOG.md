@@ -1,3 +1,22 @@
+# Unreleased
+
+# 2026.9.14
+
+* Add opt-in **Reader Health** monitoring per API key, with a six-hour default
+  timeout, one outage alert, and recovery notifications through email, Pushover,
+  Telegram and Discord. Administrators select destinations and user recipients.
+* Persist receipt/incident/delivery state across restarts, count valid messages
+  before duplicate and ignore filters, and retry failed notifications independently.
+* Add shared admin settings/status/test controls, credential masking, protected
+  settings writes and an additive database migration. Monitoring stays disabled
+  until configured. See [setup and limitations](server/docs/reader-health.md).
+* Match Reader Health controls, tables and dark-theme panels to the existing
+  Admin Settings theming, including Dark and Compact Dark where Bootswatch Paper
+  would otherwise render bright white panels.
+* Automated provider tests use mocks; live channel and browser verification is
+  still required before production enablement. No live configuration is changed
+  by development of this feature.
+
 # 2026.8.15
 
 **Editing or creating an alias no longer takes twelve seconds.** Opening

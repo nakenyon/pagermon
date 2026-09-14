@@ -41,7 +41,7 @@ passport.use(
 
 passport.use(
         'login-api',
-        new LocalAPIKeyStrategy(function(apikey, done) {
+        new LocalAPIKeyStrategy({ passReqToCallback: true }, function(req, apikey, done) {
                 nconf.load();
                 const auth = nconf.get('auth');
                 const key = auth.keys.find(x => x.key === apikey);
@@ -49,6 +49,8 @@ passport.use(
                 if (key) {
                         // do a bcrypt compare
                         if (apikey == key.key) {
+                                // Metadata only: retain the legacy principal and authorization behavior.
+                                req.readerKeyId = key.id;
                                 return done(null, key.name);
                         }
                         return done(null, false);

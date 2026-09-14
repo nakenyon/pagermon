@@ -13,6 +13,8 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         Settings: $resource('/admin/settingsData', null, {
           'post': { method:'POST', isArray: false }
         }),
+        ReaderHealth: $resource('/admin/readerHealth'),
+        ReaderHealthTest: $resource('/admin/readerHealth/test', null, { 'post': { method: 'POST' } }),
         MailTest: $resource('/admin/mailTest', null, {
           'post': { method:'POST', isArray: false }
         }),
@@ -1020,10 +1022,65 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         if (!results.settings.auth.minPasswordLength)
           results.settings.auth.minPasswordLength = 10;
         $scope.settings = results.settings;
+        setupHealth();
         $scope.plugins = results.plugins;
         $scope.themes = results.themes;
       });
 
+
+      $scope.healthView = { status: null, test: '', testing: false, users: [] };
+      Api.Users.query(function(users) { $scope.healthView.users = users.filter(function(u) { return !!u.email; }); });
+      function setupHealth() {
+        var h = $scope.settings.readerHealth || ($scope.settings.readerHealth = { destinations: [], monitors: [] });
+        var keys = $scope.settings.auth.keys;
+        keys.forEach(function(key) {
+          key.id = key.id || uuid.v4();
+          if (!h.monitors.some(function(m) { return m.keyId === key.id; })) {
+            h.monitors.push({ keyId: key.id, enabled: false, timeoutMinutes: 360, destinationIds: [], recoveryUserIds: [] });
+          }
+        });
+        h.monitors = h.monitors.filter(function(m) { return keys.some(function(k) { return k.id === m.keyId; }); });
+      }
+      $scope.healthKeyName = function(id) {
+        var key = $scope.settings.auth.keys.filter(function(k) { return k.id === id; })[0];
+        return key ? key.name : 'Deleted key';
+      };
+      $scope.healthRefresh = function() {
+        Api.ReaderHealth.get(function(data) { $scope.healthView.status = data; }, function() {
+          $scope.healthView.status = { error: 'Could not load reader health status' };
+        });
+      };
+      $scope.healthRefresh();
+      $scope.healthState = function(id) {
+        var status = $scope.healthView.status;
+        var state = status && (status.monitors || []).filter(function(m) { return m.key_id === id; })[0];
+        if (status && status.error) return 'Monitoring error';
+        if (!state || !state.enabled) return 'Disabled / not yet saved';
+        if (state.incident_id) return 'Inactive';
+        return state.last_received ? 'Healthy' : 'Waiting for first message';
+      };
+      $scope.healthLast = function(id) {
+        var status = $scope.healthView.status;
+        var state = status && (status.monitors || []).filter(function(m) { return m.key_id === id; })[0];
+        return state && state.last_received ? new Date(Number(state.last_received) * 1000).toISOString() : 'None';
+      };
+      $scope.healthAddDestination = function() {
+        $scope.settings.readerHealth.destinations.push({ id: uuid.v4(), name: '', type: 'email', userIds: [], token: '', userKey: '', chatId: '', webhook: '' });
+      };
+      $scope.healthRemoveDestination = function(destination) {
+        var h = $scope.settings.readerHealth;
+        h.destinations = h.destinations.filter(function(d) { return d.id !== destination.id; });
+        h.monitors.forEach(function(m) { m.destinationIds = m.destinationIds.filter(function(id) { return id !== destination.id; }); });
+      };
+      $scope.healthTest = function(destination) {
+        $scope.healthView.testing = true;
+        $scope.healthView.test = 'Sending test to ' + destination.name + '…';
+        Api.ReaderHealthTest.post({}, { destinationId: destination.id }).$promise.then(function() {
+          $scope.healthView.test = 'Test accepted by provider for ' + destination.name;
+        }, function(response) {
+          $scope.healthView.test = (response.data && response.data.error) || 'Test failed';
+        })['finally'](function() { $scope.healthView.testing = false; });
+      };
 
       // Verifies the SMTP settings the server currently has stored (not what is
       // on screen) and sends a real message, so a misconfiguration surfaces here
@@ -1047,11 +1104,14 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       };
 
       $scope.settingsSubmit = function() {
+        setupHealth();
         $scope.loading = true;
         Api.Settings.save(null, $scope.settings).$promise.then(function (response) {
-          console.log(response);
           $scope.loading = false;
           if (response.status == 'ok') {
+            if (response.settings) $scope.settings = response.settings;
+            setupHealth();
+            $scope.healthRefresh();
             $scope.alertMessage.text = 'Settings saved!';
             $scope.alertMessage.type = 'alert-success';
             $scope.alertMessage.show = true;
@@ -1063,7 +1123,6 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             $timeout(function () { $scope.alertMessage.show = false; }, 3000);
           }
         }, function(response) {
-          console.log(response);
           $scope.alertMessage.text = 'Error saving settings: ' + response.data.error;
           $scope.alertMessage.type = 'alert-danger';
           $scope.alertMessage.show = true;
@@ -1109,6 +1168,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
           'name': "",
           'key': ""
         });
+        setupHealth();
       };
 
       $scope.addMatch = function () {
@@ -1182,6 +1242,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             }
         });
         $scope.settings.auth.keys = newDataList;
+        setupHealth();
       };
 
       $scope.removeMatch = function () {

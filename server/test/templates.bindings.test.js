@@ -126,6 +126,16 @@ describe('Angular template bindings', () => {
         );
     });
 
+    it('should keep Reader Health controls on the same settings grid as the rest of admin', () => {
+        const html = fs.readFileSync(path.join(THEMES_DIR, '_shared', 'public', 'templates', 'admin', 'readerHealth.html'), 'utf8');
+        const labels = html.match(/<label class="[^"]*control-label[^"]*"/g) || [];
+
+        labels.length.should.be.above(0);
+        labels.forEach(label => label.should.contain('col-xs-4 col-sm-3'));
+        html.should.contain('col-xs-8 col-sm-9');
+        html.should.contain('table table-striped table-condensed');
+    });
+
     it('should keep ui-validate comparisons pointing at the same object', () => {
         // The confirm-password field compares against the password field. When
         // the model moved onto an object the comparison had to move with it, or

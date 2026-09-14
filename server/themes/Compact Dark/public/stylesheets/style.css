@@ -1,4 +1,61 @@
 /* Dark Mode specific color overrides */
+
+/* Reader Health uses shared markup, but Paper's panels and multi-selects are
+ * light by default. Scope this palette so other admin/message panels do not
+ * change, and keep it in sync with Dark. */
+.reader-health .panel {
+    background-color: #292929;
+    border-color: #5e5e5e;
+    color: #ffffff;
+}
+
+.reader-health .panel-default > .panel-heading {
+    background-color: #1e1e1e;
+    border-color: #5e5e5e;
+    color: #ffffff;
+}
+
+.reader-health .help-block {
+    color: #d7d7d7;
+}
+
+.reader-health select[multiple].form-control,
+.reader-health select[size].form-control {
+    background-color: #2b2b2b;
+    color: #ffffff;
+}
+
+.reader-health select option:checked {
+    background-color: #8f2424;
+    color: #ffffff;
+}
+
+.reader-health .btn-default {
+    background-color: #444444;
+    border-color: #6f6f6f;
+    color: #ffffff;
+}
+
+.reader-health .btn-default:hover,
+.reader-health .btn-default:focus,
+.reader-health .btn-default:active {
+    background-color: #5e5e5e;
+    border-color: #f85959;
+    color: #ffffff;
+}
+
+.reader-health .alert-warning {
+    background-color: #5b451c;
+    border-color: #b99141;
+    color: #ffe0a3;
+}
+
+.reader-health .table > thead > tr > th,
+.reader-health .table > tbody > tr > td,
+.reader-health .table-responsive {
+    border-color: #5e5e5e;
+}
+
 #home-body {
     background: #373737;
     color: white;
@@ -524,6 +581,7 @@ body {
         margin-left: 15px;
         padding-right: 30px;
     }
+}
 
 /* Form inputs.
  *

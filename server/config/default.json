@@ -77,6 +77,10 @@
       }
     ]
   },
+  "readerHealth": {
+    "destinations": [],
+    "monitors": []
+  },
   "monitoring": {
     "azureEnable": false,
     "azureKey": "",

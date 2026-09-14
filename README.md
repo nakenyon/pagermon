@@ -74,6 +74,9 @@ attribution is legally required. It is given because it should be.
 * Pagination and searching
 * Filtering by capcode or agency
 * Duplicate message filtering
+* [Reader inactivity alerts](server/docs/reader-health.md) — per-API-key silence
+  detection (six hours by default), with outage and recovery notifications via
+  email, Pushover, Telegram or Discord; administrator-configured and opt-in
 * Optional message rotation — delete messages older than a configurable
   retention window (off by default; enable under admin settings)
 * Native POCSAG / FLEX / EAS Client Support

@@ -206,8 +206,16 @@ router.route('/messages')
         }
       });
   })
-  .post(authHelper.isAdmin, function (req, res, next) {
+  .post(authHelper.isAdmin, async function (req, res, next) {
     nconf.load();
+    // Count valid arrivals before any duplicate/alias/plugin discard. Do not use
+    // client timestamps, stored-message counts, or a session admin's request.
+    const validHealthAddress = (typeof req.body.address === 'string' && req.body.address.trim()) ||
+      (typeof req.body.address === 'number' && Number.isFinite(req.body.address) && req.body.address > 0);
+    if (req.readerKeyId && validHealthAddress && typeof req.body.message === 'string' && req.body.message.trim()) {
+      await req.app.locals.databaseReady;
+      await require('../lib/readerhealth').instance().record(req.readerKeyId);
+    }
     if (req.body.address && req.body.message) {
       var dbtype = nconf.get('database:type');
       var filterDupes = nconf.get('messages:duplicateFiltering');

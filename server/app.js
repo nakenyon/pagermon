@@ -84,7 +84,7 @@ if (azureEnable) {
 checkForDbDriver(nconf.get('database:type'));
 
 var dbinit = require('./db');
-    dbinit.init();
+var databaseReady = dbinit.init();
 var db = require('./knex/knex.js');
 
 var passport = require('./auth/local');
@@ -97,6 +97,7 @@ var auth = require('./routes/auth');
 
 var port = normalizePort(process.env.PORT || '3000');
 var app = express();
+    app.locals.databaseReady = Promise.resolve(databaseReady);
     app.set('port', port);
     // view engine setup
     app.set('views', path.join(__dirname,'themes',theme, 'views'));
@@ -303,6 +304,13 @@ if (process.env.NODE_ENV !== 'test') {
   require('./cron/messageRotation').schedule(db, nconf);
   // Same rationale: drops spent and expired password-reset / email-change tokens.
   require('./cron/tokenCleanup').schedule(db);
+  Promise.resolve(databaseReady).then(function (ready) {
+    if (!ready) throw new Error('Database initialization failed');
+    return require('./cron/readerHealth').schedule(nconf);
+  }).catch(function () {
+    logger.main.error('Reader health could not start; check database migration and config write permissions.');
+    require('./lib/readerhealth').instance().reportError();
+  });
 }
 
 //Disable all logging for tests

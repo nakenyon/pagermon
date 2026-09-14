@@ -7,6 +7,22 @@ var logger = require('../log');
 var util = require('util');
 var passport = require('../auth/local'); // pass passport for configuration
 const authHelper = require('../middleware/authhelper')
+const healthConfig = require('../lib/readerhealthconfig');
+const readerHealth = require('../lib/readerhealth');
+const db = require('../knex/knex');
+const csrf = require('../middleware/csrf');
+router.use(csrf.issue);
+
+function healthCsrf(req, res, next) {
+    const h = healthConfig.health({ readerHealth: nconf.get('readerHealth') });
+    if ((req.body && req.body.readerHealth) || h.monitors.length || h.destinations.length) return csrf.verify(req, res, next);
+    next();
+}
+
+function sessionAdmin(req, res, next) {
+    if (req.isAuthenticated() && req.user && req.user.role === 'admin' && !req.readerKeyId) return next();
+    return res.status(403).json({ error: 'An administrator session is required' });
+}
 
 router.use(function (req, res, next) {
     res.locals.login = req.isAuthenticated();
@@ -30,7 +46,7 @@ router.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 router.route('/settingsData')
     .get(authHelper.isAdmin, function (req, res, next) {
         nconf.load();
-        let settings = nconf.get();
+        let settings = healthConfig.publicSettings(nconf.get(), req.isAuthenticated() && req.user.role === 'admin');
         // logger.main.debug(util.format('Config:\n\n%o',settings));
         let plugins = [];
         fs.readdirSync('./plugins').forEach(file => {
@@ -52,19 +68,57 @@ router.route('/settingsData')
         let data = { "settings": settings, "plugins": plugins, "themes": themes }
         res.json(data);
     })
-    .post(authHelper.isAdmin, function (req, res, next) {
+    .post(authHelper.isAdmin, healthCsrf, async function (req, res, next) {
         nconf.load();
-        if (req.body) {
-            //console.log(req.body);
-            var currentConfig = nconf.get();
-            fs.writeFileSync(conf_backup, JSON.stringify(currentConfig, null, 2));
-            fs.writeFileSync(confFile, JSON.stringify(req.body, null, 2));
+        const previous = JSON.parse(JSON.stringify(nconf.get()));
+        const h = healthConfig.health(previous);
+        // Legacy API-key settings clients may still save unrelated configuration
+        // on installs without health monitoring. They cannot enable, change or
+        // erase monitoring (including by omitting the protected section).
+        if ((!req.isAuthenticated() || req.user.role !== 'admin') &&
+            ((req.body && req.body.readerHealth) || h.monitors.length || h.destinations.length)) {
+            return res.status(403).json({ error: 'An administrator session is required for reader health settings' });
+        }
+        let settings;
+        try {
+            settings = await healthConfig.prepare(req.body, previous, db);
+        } catch (err) {
+            return res.status(400).json({ error: err.readerHealthValidation ? err.message : 'Invalid settings or unavailable database' });
+        }
+        try {
+            fs.writeFileSync(conf_backup, JSON.stringify(previous, null, 2), { mode: 0o600 });
+            fs.chmodSync(conf_backup, 0o600);
+            // Docker's config.json is a symlink into /data. Replace its TARGET,
+            // never the symlink, or settings disappear on container recreation.
+            const target = fs.realpathSync(confFile);
+            fs.writeFileSync(target + '.tmp', JSON.stringify(settings, null, 2), { mode: 0o600 });
+            fs.renameSync(target + '.tmp', target);
             nconf.load();
-            res.status(200).send({ 'status': 'ok' });
-        } else {
-            res.status(400).send({ error: 'request body empty' });
+            await readerHealth.instance().sync();
+            res.status(200).json({ status: 'ok', settings: healthConfig.publicSettings(settings, true) });
+        } catch (err) {
+            readerHealth.instance().reportError();
+            res.status(500).json({ error: 'Could not finish saving settings; configuration may have been saved. Check database/config permissions and reload.' });
         }
     });
+
+router.get('/readerHealth', sessionAdmin, async function (req, res) {
+    res.json(await readerHealth.instance().status());
+});
+
+// Small process-local rate limit prevents accidental button double-clicks or
+// repeated requests from flooding selected recipients. No state is changed.
+let lastHealthTest = 0;
+router.post('/readerHealth/test', sessionAdmin, csrf.verify, async function (req, res) {
+    if (Date.now() - lastHealthTest < 10000) return res.status(429).json({ error: 'Wait ten seconds between tests' });
+    lastHealthTest = Date.now();
+    try {
+        await readerHealth.instance().test(req.body.destinationId);
+        res.json({ status: 'ok' });
+    } catch (_) {
+        res.status(400).json({ error: 'Test failed; save settings and check recipients, credentials and connectivity' });
+    }
+});
 
 // Validates the mail settings and sends a real message to the calling admin.
 // Without this, the first sign that SMTP is misconfigured is a user reporting a

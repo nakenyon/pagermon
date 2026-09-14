@@ -3,7 +3,12 @@ node_modules
 test
 logs/*.log
 config/config.json
-messages.db
+config/backup.json
+config/*.tmp
+coverage
+.nyc_output
+*.db
+*.db-*
 *.md
 .eslintrc
 .nycrc

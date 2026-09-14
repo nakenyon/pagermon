@@ -58,6 +58,9 @@ function transport(conf) {
         secure: c.secure,
         requireTLS: c.requireTLS,
         tls: { rejectUnauthorized: c.rejectUnauthorized },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
     };
     // An unauthenticated relay is legitimate on an internal network; passing
     // empty credentials makes nodemailer attempt AUTH and fail.

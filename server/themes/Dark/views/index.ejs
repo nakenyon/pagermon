@@ -83,8 +83,21 @@
                     <li ng-class="{disabled:init.limit == 100}"><a href="#" ng-click="setCookie('messageLimit', 100);">100</a></li>
                   </ul>
                 </span>
+                <span class="dropdown" ng-if="systemFilter.any">
+                  <button class="btn btn-default btn-sm dropdown-toggle" type="button" data-toggle="dropdown" title="Filter by System">{{systemFilterLabel()}} <span class="caret"></span></button>
+                  <ul class="dropdown-menu" role="menu" style="margin-top: 9px;">
+                    <li><a href="#" ng-click="selectAllSystems();">All systems</a></li>
+                    <li class="divider"></li>
+                    <li ng-repeat="sys in systemFilter.systems"><a href="#" ng-click="toggleSystem(sys.id);">
+                      <i class="fa fa-fw" ng-class="systemFilter.selected[sys.id] ? 'fa-check-square-o' : 'fa-square-o'"></i>
+                      {{sys.label || sys.name}}</a></li>
+                  </ul>
+                </span>
                 </div>
             </th>
+            <% if (systems && systems.length > 1) { %>
+              <th class="noMobile noSmall" style="text-align: center;">System</th>
+            <% } %>
             <% if (!hidesource || (login && user.role == 'admin')) { %>
               <th class="noMobile noSmall" style="text-align: center;">Src</th>
             <% } %>
@@ -103,6 +116,11 @@
           <tr ng-repeat="message in messages | filter: search">
             <td class="shrink noMobile noSmall">{{message.date}}</td>
             <td class="shrink">{{message.timestamp}}</td>
+            <% if (systems && systems.length > 1) { %>
+              <td class="shrink noMobile noSmall clickable-td" style="background-color: {{message.system_color || 'grey'}}; text-align: center;">
+                <span class="small" style="color: white; font-family: monospace;"><strong>{{message.system_name}}</strong></span>
+              </td>
+            <% } %>
             <% if (!hidesource || (login && user.role == 'admin')) { %>
               <td class="shrink noMobile noSmall clickable-td" uib-popover-template="'templates/popover.html'" popover-append-to-body=true ng-click="popoverEl = 'source'" popover-trigger="'outsideClick'" style="background-color: {{message.color || 'grey'}}; text-align: center;">
                 <span class="small" style="color: white; font-family: monospace;"><strong>{{message.source}}</strong></span>

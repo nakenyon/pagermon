@@ -343,6 +343,30 @@ describe('Read path system filtering', () => {
                 },
         ]));
 
+        // Deliberately uses messages whose alias resolves, i.e. capcodes.ignore
+        // is 0 rather than NULL. The list query ORs the ignore test, and an
+        // ungrouped OR swallows the system filter for exactly these rows: a
+        // fixture of unmatched messages passes while a real database does not.
+        it('filters matched messages, not just unmatched ones', async () => {
+                await db('messages').insert([
+                        {
+                                address: '1234567', message: 'Matched in system one', source: 'a',
+                                timestamp: 1529496100, system_id: 1,
+                                alias_id: (await db('capcodes').where({ address: '1234567', system_id: 1 }).first()).id,
+                        },
+                        {
+                                address: '0001000', message: 'Matched in system two', source: 'b',
+                                timestamp: 1529496101, system_id: 2,
+                                alias_id: (await db('capcodes').where({ address: '0001000', system_id: 2 }).first()).id,
+                        },
+                ]);
+                const res = await chai.request(server).get('/api/messages?system=2');
+                res.status.should.eql(200);
+                res.body.messages.every(m => m.system_id === 2).should.eql(true);
+                // The count and the page must agree.
+                res.body.messages.length.should.eql(res.body.init.msgCount);
+        });
+
         it('filters GET /api/messages and keeps the count consistent', done => {
                 chai.request(server)
                         .get('/api/messages?system=2')

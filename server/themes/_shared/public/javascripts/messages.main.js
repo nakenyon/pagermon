@@ -119,6 +119,91 @@
       $scope.user = config.user;
       $scope.role = config.role;
 
+      // System selection.
+      //
+      // A view preference, not a security boundary: every viewer may see every
+      // system, and this only filters the display. It is kept in a cookie
+      // alongside messageLimit and notificationEnabled, so it survives a reload
+      // for anonymous viewers too (who matter whenever apiSecurity is off) and
+      // needs no schema. Bound through an object because the selector sits in
+      // an ng-repeat child scope - see test/templates.bindings.test.js.
+      $scope.systemFilter = { selected: {}, systems: [], any: false };
+
+      function readSystemCookie() {
+        var raw = $cookies.get('systemFilter') || '';
+        var selected = {};
+        raw.split(',').forEach(function (id) {
+          if (id !== '') selected[id] = true;
+        });
+        return selected;
+      }
+
+      // The value sent to the API: a comma-separated list of ids, or '' for
+      // "all systems". Selecting every system is the same as selecting none,
+      // and is normalised to '' so the URL stays clean.
+      //
+      // Derived from the selection map rather than the loaded system list,
+      // because the first updateData() runs before GET /api/systems has come
+      // back - reading the list there would silently ignore the stored
+      // preference on every page load.
+      function selectedSystemIds() {
+        var ids = Object.keys($scope.systemFilter.selected);
+        if (!ids.length) return '';
+        if ($scope.systemFilter.systems.length && ids.length === $scope.systemFilter.systems.length) return '';
+        return ids.join(',');
+      }
+
+      // A system in the URL wins over the stored preference, so a filtered view
+      // can be linked to and reloaded.
+      $scope.systemFilter.selected = readSystemCookie();
+      if ($routeParams.system) {
+        var fromUrl = {};
+        String($routeParams.system).split(',').forEach(function (id) {
+          if (id !== '') fromUrl[id] = true;
+        });
+        $scope.systemFilter.selected = fromUrl;
+      }
+
+      Api.Systems.query().$promise.then(function (systems) {
+        $scope.systemFilter.systems = systems;
+        // Drop ids for systems that no longer exist, so a stale cookie cannot
+        // pin the view to nothing.
+        var live = {};
+        systems.forEach(function (s) {
+          if ($scope.systemFilter.selected[s.id]) live[s.id] = true;
+        });
+        $scope.systemFilter.selected = live;
+        $scope.systemFilter.any = systems.length > 1;
+      }, function () {
+        // An older server without /api/systems, or a failed request: fall back
+        // to showing everything rather than an empty list.
+        $scope.systemFilter.systems = [];
+        $scope.systemFilter.any = false;
+      });
+
+      $scope.toggleSystem = function (id) {
+        if ($scope.systemFilter.selected[id]) {
+          delete $scope.systemFilter.selected[id];
+        } else {
+          $scope.systemFilter.selected[id] = true;
+        }
+        $scope.setCookie('systemFilter', selectedSystemIds());
+      };
+
+      $scope.selectAllSystems = function () {
+        $scope.systemFilter.selected = {};
+        $scope.setCookie('systemFilter', '');
+      };
+
+      $scope.systemFilterLabel = function () {
+        var ids = selectedSystemIds();
+        if (ids === '') return 'All systems';
+        var names = $scope.systemFilter.systems
+          .filter(function (s) { return $scope.systemFilter.selected[s.id]; })
+          .map(function (s) { return s.label || s.name; });
+        return names.length === 1 ? names[0] : names.length + ' systems';
+      };
+
       // get new message on socket event
       $scope.$on('$viewContentLoaded', function () {
 
@@ -159,6 +244,14 @@
         var notificationsAllowed = !config.apisecurity || config.login;
 
         socketMode.on('messagePost', function (message) {
+          // Client-side filtering, consistent with "view preference only" -
+          // no server-side rooms and no new namespace. The emitted row carries
+          // system_id for exactly this.
+          var wanted = selectedSystemIds();
+          if (wanted !== '' && !$scope.systemFilter.selected[message.system_id]) {
+            return;
+          }
+
           if (notificationsAllowed && $scope.notificationEnabled == 'true') {
             if (!message.agency) {
               //Not showing messages for things that we don't know
@@ -173,7 +266,11 @@
             var datetime = moment.unix(message.timestamp);
             message.date = datetime.format("YYYY-MM-DD");
             message.timestamp = datetime.format(timeFormat);
-            if ($routeParams.q || $routeParams.agency || $routeParams.address) {
+            // `alias` was missing from this list, so an alias-filtered view
+            // (/?alias=<id>, reached by clicking an alias) fell into the else
+            // branch and prepended every message on the system regardless of
+            // which alias it belonged to.
+            if ($routeParams.q || $routeParams.agency || $routeParams.address || $routeParams.alias) {
               if ($routeParams.q) {
                 var patt = new RegExp($routeParams.q, 'i');
                 if (patt.test(message.message) || patt.test(message.agency) || patt.test(message.address) || patt.test(message.alias) || patt.test(message.source)) {
@@ -191,6 +288,14 @@
               if ($routeParams.address) {
                 var patt = new RegExp($routeParams.address, 'i');
                 if (patt.test(message.address) || patt.test(message.alias) || patt.test(message.source)) {
+                  $scope.messages.unshift(message);
+                  $scope.messages.pop();
+                }
+              }
+              if ($routeParams.alias) {
+                // alias_id is the id the route param carries, so compare it
+                // rather than pattern-matching the alias text.
+                if (String(message.alias_id) === String($routeParams.alias)) {
                   $scope.messages.unshift(message);
                   $scope.messages.pop();
                 }
@@ -220,6 +325,8 @@
         var queryObj = {};
         queryObj.page = curPage;
         queryObj.limit = limit;
+        var systemIds = selectedSystemIds();
+        if (systemIds !== '') queryObj.system = systemIds;
 
         if ($routeParams.q || query) {
           $scope.query = query || $routeParams.q;
@@ -256,6 +363,8 @@
             qArray.push('alias=' + encodeURIComponent(queryObj.alias));
           if (queryObj.page > 1)
             qArray.push('page=' + encodeURIComponent(queryObj.page));
+          if (queryObj.system)
+            qArray.push('system=' + encodeURIComponent(queryObj.system));
 
           // default query string is "/" - this prevents the state from not passing on firefox
           var qString = '/';
@@ -316,7 +425,9 @@
         if (queryObj.q || queryObj.agency || queryObj.address || queryObj.alias) {
           Api.MessageSearch.get(queryObj).$promise.then(applyResults, onError('MessageSearch'));
         } else {
-          Api.Messages.get({ page: curPage, limit: limit }).$promise.then(applyResults, onError('Messages'));
+          var listQuery = { page: curPage, limit: limit };
+          if (systemIds !== '') listQuery.system = systemIds;
+          Api.Messages.get(listQuery).$promise.then(applyResults, onError('Messages'));
         }
       };
       // run the updateData function on load

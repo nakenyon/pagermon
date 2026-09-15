@@ -164,14 +164,22 @@ router.route('/messages')
             .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'),
               'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
             .modify(function (queryBuilder) {
+              // The ignore test is grouped. Left ungrouped it emitted
+              //   capcodes.ignore = 0 OR capcodes.ignore IS NULL AND <filter>
+              // and AND binds tighter than OR, so the system filter applied
+              // only to messages with no alias - every matched message came
+              // back whatever system it belonged to, while the count query
+              // (which is grouped) correctly reported the filtered total.
               if (pdwMode) {
                 if (adminShow && req.isAuthenticated() && req.user.role == 'admin') {
-                  queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where('capcodes.ignore', 0).orWhereNull('capcodes.ignore')
+                  queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                    .where(function () { this.where('capcodes.ignore', 0).orWhereNull('capcodes.ignore') })
                 } else {
                   queryBuilder.innerJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where('capcodes.ignore', 0)
                 }
               } else {
-                queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where('capcodes.ignore', 0).orWhereNull('capcodes.ignore')
+                queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                  .where(function () { this.where('capcodes.ignore', 0).orWhereNull('capcodes.ignore') })
               }
               queryBuilder.leftJoin('systems', 'systems.id', '=', 'messages.system_id')
               if (systemFilter) queryBuilder.whereIn('messages.system_id', systemFilter);

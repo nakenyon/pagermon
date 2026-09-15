@@ -190,26 +190,29 @@ server/knex/seeds/test_data.js                          seeds 2 systems with exp
 - Standing practice: prefer no-restart changes; confirm before restarting or
   hand-editing live config.
 
-### Test instance (still running — tear down when finished)
+### Rebuilding a throwaway test instance
 
-```
-~/docker/pagermon/test-multisystem/      compose.yml + data/ (44MB copy of York)
-http://100.109.97.103:21000              testadmin / multisystem-test
-docker compose down && rm -rf ~/docker/pagermon/test-multisystem
-```
+No test instance exists - the one used for browser verification was torn down,
+along with its data copy, its image and all `/tmp` database copies. To stand a
+new one up:
 
-Built from `pagermon-server:multisystem-test` (`docker build -t
-pagermon-server:multisystem-test server/`). Holds a copy of real York data and
-real usernames - **do not leave it up indefinitely**. Its config has all plugins
-and reader-health destinations disabled so it cannot send real notifications,
-and `SECURE_COOKIES=false` because the copied config's `siteUrl` is https and
-cookies would otherwise not be sent over plain http (presents as "Invalid or
-missing CSRF token" on login).
+1. `docker build -t pagermon-server:multisystem-test server/`
+2. New directory outside the live tree, e.g. `~/docker/pagermon/test-x/data/`;
+   copy a live `messages.db` and `config.json` into it.
+3. **Neutralise the copied config before starting it**: set every
+   `plugins.*.enable` to false and empty `readerHealth.destinations`/`monitors`.
+   A copied production config has live Discord/SMTP credentials and *will* send
+   real notifications otherwise.
+4. Compose file: own container name, own port, `volumes: ./data:/data`,
+   `restart: "no"`, and **`SECURE_COOKIES=false`** - a copied config's `siteUrl`
+   is https, so cookies would be marked `secure` and a browser would not send
+   them over plain http. That presents as "Invalid or missing CSRF token" at
+   login and is not a bug in the app.
+5. For a known admin login, insert a user with a `bcryptjs` hash directly into
+   the copied database rather than touching real accounts' hashes.
 
-It currently has three systems (York, Dauphin, Cumberland) with the real
-colliding addresses configured, and test API keys: `test-key-york`,
-`test-key-dauphin`, `test-key-shared` (source override), `test-key-legacy` (no
-system configured).
+Anything built this way holds real message content and real usernames - delete
+the directory, the image and any `/tmp` copies when finished.
 
 ---
 

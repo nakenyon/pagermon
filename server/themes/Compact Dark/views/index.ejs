@@ -200,15 +200,11 @@
               </span>
               <strong style="vertical-align: middle;"></strong>
             </td>
-            <!-- In non-Compact Mode and if a logged in user, Display the Alias and enable popup to add filter by/add an alias  -->
-            <td class="shrink noMobile noSmall clickable-td" ng-if="user"
+            <!-- Alias, with a popover offering filter-by-alias, and admin-only edit/create links gated separately on role -->
+            <td class="shrink noMobile noSmall clickable-td"
                 uib-popover-template="'templates/popover.html'" popover-append-to-body=true
                 ng-click="popoverEl = 'alias'" popover-trigger="'outsideClick'">
               <span style="color: {{message.color || 'white'}};">{{message.alias || 'Unknown'}}</span>
-            </td>
-            <!-- In non-Compact Mode and not a logged in user, Display the alias only  -->
-            <td class="shrink noMobile noSmall" ng-if="!user">
-              <span>{{message.alias || ''}}</span>
             </td>
             <td class="expand">
             <!-- Display the message for all display modes -->

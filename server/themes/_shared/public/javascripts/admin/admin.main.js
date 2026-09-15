@@ -41,6 +41,100 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         UseremailCheck: $resource('/api/userCheck/email/:id', {id: '@id'}, {
           'post': { method:'POST', isArray: false }
         }),
+        Systems: $resource('/api/systems', null, {
+          'post': { method:'POST', isArray: false }
+        }),
+        SystemDetail: $resource('/api/systems/:id', {id: '@id'}, {
+          'post': { method:'POST', isArray: false },
+          'delete': { method: 'DELETE', isArray: false }
+        }),
+      };
+    }])
+
+    // Paging systems. Modelled on UserController/UserDetailController, which is
+    // the smallest complete CRUD example in this file.
+    .controller('SystemController', ['$scope', '$routeParams', 'Api', '$uibModal', '$filter', '$location', '$timeout', function ($scope, $routeParams, Api, $uibModal, $filter, $location, $timeout) {
+      $scope.loading = true;
+      $scope.alertMessage = {};
+      $scope.page = 'systems';
+
+      $scope.loadSystems = function () {
+        Api.Systems.query(null, function (results) {
+          $scope.systems = results;
+          $scope.loading = false;
+        });
+      };
+      $scope.loadSystems();
+
+      $scope.systemDetail = function (id) {
+        $location.url('/systems/' + id);
+      };
+
+      $scope.systemDelete = function (system) {
+        var modalHtml = '<div class="modal-header"><h5 class="modal-title" id="modal-title">Delete System</h5></div>';
+        var message = '<p>Are you sure you want to delete <strong>' + (system.label || system.name) + '</strong>?</p>' +
+          '<p>A system can only be deleted once no aliases or messages belong to it.</p>';
+        modalHtml += '<div class="modal-body">' + message + '</div>';
+        modalHtml += '<div class="modal-footer"><button class="btn btn-danger" ng-click="confirmDelete()">OK</button><button class="btn btn-primary" ng-click="cancelDelete()">Cancel</button></div>';
+
+        var modalInstance = $uibModal.open({
+          template: modalHtml,
+          controller: ConfirmController
+        });
+
+        modalInstance.result.then(function () {
+          $scope.loading = true;
+          Api.SystemDetail.delete({ id: system.id }).$promise.then(function () {
+            $scope.alertMessage.text = 'System deleted';
+            $scope.alertMessage.type = 'alert-success';
+            $scope.alertMessage.show = true;
+            $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+            $scope.loadSystems();
+          }, function (response) {
+            // The server refuses to delete a system that still has aliases or
+            // messages, and says how many of each.
+            $scope.alertMessage.text = (response.data && response.data.message) || 'Error deleting system';
+            $scope.alertMessage.type = 'alert-danger';
+            $scope.alertMessage.show = true;
+            $timeout(function () { $scope.alertMessage.show = false; }, 6000);
+            $scope.loading = false;
+          });
+        }, function () { });
+      };
+    }])
+
+    .controller('SystemDetailController', ['$scope', '$routeParams', 'Api', '$location', '$timeout', function ($scope, $routeParams, Api, $location, $timeout) {
+      $scope.page = 'systemDetail';
+      $scope.alertMessage = {};
+      $scope.loading = true;
+      $scope.isNew = $routeParams.id == 'new';
+
+      Api.SystemDetail.get({ id: $routeParams.id }, function (result) {
+        $scope.system = result;
+        $scope.loading = false;
+      });
+
+      $scope.systemSubmit = function () {
+        $scope.loading = true;
+        Api.SystemDetail.post({ id: $routeParams.id }, $scope.system).$promise.then(function (response) {
+          $scope.alertMessage.text = 'System saved!';
+          $scope.alertMessage.type = 'alert-success';
+          $scope.alertMessage.show = true;
+          $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+          $scope.loading = false;
+          if ($scope.isNew) $location.url('/systems/' + response.id);
+        }, function (response) {
+          $scope.alertMessage.text = 'Error saving system: ' +
+            ((response.data && response.data.message) || response.status);
+          $scope.alertMessage.type = 'alert-danger';
+          $scope.alertMessage.show = true;
+          $timeout(function () { $scope.alertMessage.show = false; }, 6000);
+          $scope.loading = false;
+        });
+      };
+
+      $scope.cancel = function () {
+        $location.url('/systems');
       };
     }])
 
@@ -731,6 +825,18 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         });
       }
 
+      // The System select. An alias belongs to exactly one system, and a new
+      // one defaults to the default system so it is never created belonging to
+      // nothing - a capcode with no system can never be matched by ingest.
+      $scope.systems = [];
+      var systemsPromise = Api.Systems.query().$promise.then(function (results) {
+        $scope.systems = results;
+        return results;
+      }, function () {
+        $scope.systems = [];
+        return [];
+      });
+
       $scope.aliasLoad = function() {
         $scope.loading = true;
         Api.AliasDetail.get({id: $routeParams.id }, function(results) {
@@ -747,6 +853,12 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             $scope.isNew = true;
           }
 
+          systemsPromise.then(function (systems) {
+            if ($scope.alias.system_id) return;
+            var fallback = systems.filter(function (s) { return s.is_default == 1; })[0] || systems[0];
+            if (fallback) $scope.alias.system_id = fallback.id;
+          });
+
           // Whichever request finishes second does the seeding. On a Reset click
           // settingsPromise is long since settled, so this just runs on the next
           // digest - one path, no branch. `finally` so a failed settings call
@@ -761,7 +873,10 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       $scope.checkAddress = function() {
         $scope.aliasLoading = true;
         if ($scope.alias.address) {
-          Api.AliasDupeCheck.get({id: $scope.alias.address }, function(results) {
+          // Scoped to the alias's own system: the same address in another
+          // system is a different alias, not a duplicate, and that is the case
+          // multi-system support exists to allow.
+          Api.AliasDupeCheck.get({id: $scope.alias.address, system_id: $scope.alias.system_id }, function(results) {
             if (results.address) {
               $scope.aliasLoading = false;
               if (results.address == $scope.alias.originalAddress) {
@@ -999,6 +1114,14 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
  
     // needs cleanup
     .controller('SettingsController', ['$scope', '$routeParams', 'Api', 'uuid', '$uibModal', '$filter', '$timeout', '$sanitize', function ($scope, $routeParams, Api, uuid, $uibModal, $filter, $timeout, $sanitize) {
+      // Populates the per-key System select. Keys are matched to systems by
+      // name rather than id, so a config survives being moved between installs.
+      $scope.systems = [];
+      Api.Systems.query().$promise.then(function (results) {
+        $scope.systems = results;
+      }, function () {
+        $scope.systems = [];
+      });
       $scope.alertMessage = {};
       Api.Settings.get(null, function(results) {
         if (!results.settings.messages.replaceText)
@@ -1166,7 +1289,11 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       $scope.addKey = function () {
         $scope.settings.auth.keys.push({
           'name': "",
-          'key': ""
+          'key': "",
+          // Empty means the default system, which is what a key with no system
+          // resolves to at ingest. Seeded so the select binds to a real
+          // property rather than creating one on first change.
+          'system': ""
         });
         setupHealth();
       };
@@ -1316,7 +1443,15 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         .when('/aliases/:id', {
           templateUrl: '/templates/admin/aliasDetails.html' + v,
           controller: 'AliasDetailCtrl'
-       });
+       })
+        .when('/systems', {
+          templateUrl: '/templates/admin/systems.html' + v,
+          controller: 'SystemController'
+        })
+        .when('/systems/:id', {
+          templateUrl: '/templates/admin/systemDetails.html' + v,
+          controller: 'SystemDetailController'
+        });
       $httpProvider.defaults.headers.delete = { "Content-Type": "application/json;charset=utf-8" };
       $httpProvider.interceptors.push(function($q, $location) {
         return {

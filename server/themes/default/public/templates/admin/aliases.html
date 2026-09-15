@@ -30,6 +30,7 @@
             <th style="text-align: center;">Address</th>
             <th style="text-align: center;">Color</th>
             <th style="text-align: center;">Icon</th>
+            <th style="text-align: center;">System</th>
             <th style="text-align: center;">Agency</th>
             <th style="text-align: center;">Filter</th>
             <th style="text-align: center;">Alias</th>
@@ -55,6 +56,7 @@
               </span>
             <span style="vertical-align: middle;">{{alias.icon}}</span>
           </td>
+          <td class="shrink"><strong>{{alias.system_label || alias.system_name || ''}}</strong></td>
           <td class="shrink"><strong>{{alias.agency || ''}}</strong></td>
           <td class="shrink"><i class="fa fa-circle text-success" ng-if="alias.ignore == 0"></i><i
                   class="fa fa-exclamation-circle text-danger" ng-if="alias.ignore == 1"></i></td>

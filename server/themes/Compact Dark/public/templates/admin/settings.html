@@ -590,7 +590,8 @@
                 <thead class="thead-default">
                   <tr>
                     <th width="1%"></th>
-                    <th width="25%">Name</th>
+                    <th width="20%">Name</th>
+                    <th width="20%">System</th>
                     <th width="99%">Key</th>
                     <th width="1%"></th>
                   </tr>
@@ -601,6 +602,12 @@
                       <input type="checkbox" ng-model="key.selected"/></td>
                     <td>
                       <input type="text" class="form-control" placeholder="Name" ng-model="key.name" required></td>
+                    <td>
+                      <select class="form-control" ng-model="key.system"
+                              ng-options="s.name as (s.label || s.name) for s in systems"
+                              title="The paging system messages from this key belong to">
+                        <option value="">(default system)</option>
+                      </select></td>
                     <td colspan="{{key.key ? '2' : '1'}}">
                       <input type="text" class="form-control" placeholder="Key" ng-model="key.key" readonly required></td>
                     <td ng-if="key.key == ''">
@@ -611,6 +618,7 @@
                     <td style="text-align: left;">
                       <input ng-disabled="!keySelected()" type="button" class="btn btn-sm btn-danger" ng-click="removeKey()" value="&times;">
                     </td>
+                    <td></td>
                     <td></td>
                     <td></td>
                     <td>

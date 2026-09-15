@@ -330,6 +330,167 @@ describe('GET /api/capcodeCheck/:id', () => {
         });
 });
 
+describe('Read path system filtering', () => {
+        // Two messages in system 2 against the five the seed puts in system 1.
+        beforeEach(() => db('messages').insert([
+                {
+                        address: '0001000', message: 'System two message one', source: 'reader-b',
+                        timestamp: 1529495999, system_id: 2,
+                },
+                {
+                        address: '0001000', message: 'System two message two', source: 'reader-b',
+                        timestamp: 1529496000, system_id: 2,
+                },
+        ]));
+
+        it('filters GET /api/messages and keeps the count consistent', done => {
+                chai.request(server)
+                        .get('/api/messages?system=2')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(200);
+                                res.body.messages.length.should.eql(2);
+                                res.body.messages.every(m => m.system_id === 2).should.eql(true);
+                                // The count is computed by a separate query from
+                                // the page; if the filter is missing from either,
+                                // pagination describes a different result set.
+                                res.body.init.msgCount.should.eql(2);
+                                res.body.init.pageCount.should.eql(1);
+                                done();
+                        });
+        });
+
+        it('accepts several systems and returns all of them', done => {
+                chai.request(server)
+                        .get('/api/messages?system=1,2')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.body.init.msgCount.should.eql(7);
+                                done();
+                        });
+        });
+
+        it('returns every system when no filter is given', done => {
+                chai.request(server)
+                        .get('/api/messages')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.body.init.msgCount.should.eql(7);
+                                done();
+                        });
+        });
+
+        it('badges rows with their system', done => {
+                chai.request(server)
+                        .get('/api/messages?system=2')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.body.messages[0].should.have.property('system_name').eql('Second');
+                                res.body.messages[0].should.have.property('system_color').eql('purple');
+                                done();
+                        });
+        });
+
+        it('filters the full-text search branch', done => {
+                chai.request(server)
+                        // 'message' matches seeded rows in both systems.
+                        .get('/api/messageSearch?q=message&system=2')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(200);
+                                res.body.messages.length.should.be.above(0);
+                                // No row from system 1 may leak through FTS.
+                                res.body.messages.every(m => m.system_id === 2).should.eql(true);
+                                done();
+                        });
+        });
+
+        it('filters the structured search branch', done => {
+                chai.request(server)
+                        .get('/api/messageSearch?address=0001000&system=2')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.body.messages.every(m => m.system_id === 2).should.eql(true);
+                                res.body.messages.length.should.eql(2);
+                                done();
+                        });
+        });
+
+        it('groups the address/source clause so agency still narrows it', done => {
+                // Before the grouping fix this emitted
+                //   address LIKE ? OR source = ? AND alias_id IN (...)
+                // so the address matches came back whatever the agency was.
+                chai.request(server)
+                        .get('/api/messageSearch?address=1234567&agency=POLICE')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                // Address 1234567 is FIRE, so pairing it with
+                                // POLICE must return nothing.
+                                res.body.messages.length.should.eql(0);
+                                done();
+                        });
+        });
+});
+
+describe('/api/systems', () => {
+        it('is readable by a plain user, not admin-only', done => {
+                passportStub.login({ username: 'useractive', password: 'changeme', role: 'user' });
+                chai.request(server)
+                        .get('/api/systems')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(200);
+                                res.body.should.be.a('array');
+                                res.body.length.should.eql(2);
+                                done();
+                        });
+        });
+
+        it('refuses to delete a system that still has messages', async () => {
+                await db('messages').insert({
+                        address: '0001000', message: 'Still here', source: 'b', timestamp: 1529496001, system_id: 2,
+                });
+                passportStub.login({ username: 'adminactive', password: 'changeme', role: 'admin' });
+                const res = await chai.request(server).delete('/api/systems/2');
+                res.status.should.eql(400);
+                // The row must survive: this guard is the only referential
+                // integrity in the schema.
+                should.exist(await db('systems').where('id', 2).first());
+        });
+
+        it('refuses to delete the default system', async () => {
+                passportStub.login({ username: 'adminactive', password: 'changeme', role: 'admin' });
+                const res = await chai.request(server).delete('/api/systems/1');
+                res.status.should.eql(400);
+                should.exist(await db('systems').where('id', 1).first());
+        });
+
+        it('deletes an empty non-default system', async () => {
+                passportStub.login({ username: 'adminactive', password: 'changeme', role: 'admin' });
+                await db('capcodes').where('system_id', 2).del();
+                const res = await chai.request(server).delete('/api/systems/2');
+                res.status.should.eql(200);
+                should.not.exist(await db('systems').where('id', 2).first());
+        });
+
+        it('keeps exactly one default when a new one is set', async () => {
+                passportStub.login({ username: 'adminactive', password: 'changeme', role: 'admin' });
+                const res = await chai.request(server).post('/api/systems/2').send({
+                        name: 'Second', label: 'Second System', is_default: 1,
+                });
+                res.status.should.eql(200);
+                const defaults = await db('systems').where('is_default', 1);
+                defaults.length.should.eql(1);
+                defaults[0].id.should.eql(2);
+        });
+
+        it('rejects a duplicate system name', async () => {
+                passportStub.login({ username: 'adminactive', password: 'changeme', role: 'admin' });
+                const res = await chai.request(server).post('/api/systems').send({ name: 'Default' });
+                res.status.should.eql(400);
+        });
+});
+
 describe('lib/systems', () => {
         it('parses a comma-separated system filter', () => {
                 should.equal(systems.parseFilter(undefined), null);

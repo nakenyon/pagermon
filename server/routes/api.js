@@ -62,14 +62,23 @@ router.use(function (req, res, next) {
   next();
 });
 
-// defaults
-var initData = {};
-initData.limit = nconf.get('messages:defaultLimit');
-initData.replaceText = nconf.get('messages:replaceText');
-initData.currentPage = 0;
-initData.pageCount = 0;
-initData.msgCount = 0;
-initData.offset = 0;
+// Per-request pagination state.
+//
+// This was a single module-level object mutated in place by both list handlers,
+// so two overlapping requests read and wrote each other's currentPage, limit and
+// offset - a page of results could be computed with another request's offset.
+// Adding a system filter makes that more likely, not less, because a filtered
+// and an unfiltered request differ in msgCount. Each request now gets its own.
+function newInitData() {
+  return {
+    limit: nconf.get('messages:defaultLimit'),
+    replaceText: nconf.get('messages:replaceText'),
+    currentPage: 0,
+    pageCount: 0,
+    msgCount: 0,
+    offset: 0
+  };
+}
 
 // auth variables
 var HideCapcode = nconf.get('messages:HideCapcode');
@@ -89,8 +98,10 @@ router.route('/messages')
     var maxLimit = nconf.get('messages:maxLimit');
     var defaultLimit = nconf.get('messages:defaultLimit');
     var HideCapcode = nconf.get('messages:HideCapcode');
+    var initData = newInitData();
+    // null means "no filter", not "match nothing" - see lib/systems.parseFilter.
+    var systemFilter = systems.parseFilter(req.query.system);
 
-    initData.replaceText = nconf.get('messages:replaceText');
     if (typeof req.query.page !== 'undefined') {
       var page = parseInt(req.query.page, 10);
       if (page > 0) {
@@ -123,7 +134,13 @@ router.route('/messages')
       } else {
         this.from('messages').where('alias_id', 'not in', subquery).orWhereNull('alias_id')
       }
-    }).count('* as msgcount')
+    })
+      // The same filter must be applied to the count and to the page below, or
+      // pageCount describes a different result set than the one returned.
+      .modify(function (queryBuilder) {
+        if (systemFilter) queryBuilder.whereIn('messages.system_id', systemFilter);
+      })
+      .count('* as msgcount')
       .then(function (initcount) {
         var count = initcount[0]
         if (count) {
@@ -144,7 +161,8 @@ router.route('/messages')
           var rowCount
 
           db.from('messages')
-            .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'))
+            .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'),
+              'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
             .modify(function (queryBuilder) {
               if (pdwMode) {
                 if (adminShow && req.isAuthenticated() && req.user.role == 'admin') {
@@ -155,6 +173,8 @@ router.route('/messages')
               } else {
                 queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where('capcodes.ignore', 0).orWhereNull('capcodes.ignore')
               }
+              queryBuilder.leftJoin('systems', 'systems.id', '=', 'messages.system_id')
+              if (systemFilter) queryBuilder.whereIn('messages.system_id', systemFilter);
             })
             .orderBy('messages.timestamp', 'desc')
             .limit(initData.limit)
@@ -558,7 +578,8 @@ router.route('/messageSearch')
     var HideCapcode = nconf.get('messages:HideCapcode');
     var apiSecurity = nconf.get('messages:apiSecurity');
     var defaultLimit = nconf.get('messages:defaultLimit');
-    initData.replaceText = nconf.get('messages:replaceText');
+    var initData = newInitData();
+    var systemFilter = systems.parseFilter(req.query.system);
 
     if (typeof req.query.page !== 'undefined') {
       var page = parseInt(req.query.page, 10);
@@ -597,7 +618,8 @@ router.route('/messageSearch')
 
     var data = []
     console.time('sql')
-    db.select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'))
+    db.select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'),
+      'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
       .modify(function (qb) {
         if (dbtype == 'sqlite3' && query != '') {
           qb.from('messages_search_index')
@@ -614,6 +636,7 @@ router.route('/messageSearch')
         } else {
           qb.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id');
         }
+        qb.leftJoin('systems', 'systems.id', '=', 'messages.system_id');
         if (dbtype == 'sqlite3' && query != '') {
           qb.whereRaw('messages_search_index MATCH ?', query)
         } else if (dbtype == 'mysql' && query != '') {
@@ -623,8 +646,15 @@ router.route('/messageSearch')
         } else if (dbtype == 'oracledb' && query != '') {
           qb.whereRaw(`CONTAINS("messages"."message", ?, 1) > 0`, query)
         } else {
+          // Grouped. Without the parentheses this emitted
+          //   address LIKE ? OR source = ? AND alias_id IN (...)
+          // and AND binds tighter than OR, so combining an address with an
+          // agency returned every message matching the address regardless of
+          // agency, plus the ones the caller actually asked for.
           if (address != '')
-            qb.where('messages.address', 'LIKE', address).orWhere('messages.source', address);
+            qb.where(function (qb2) {
+              qb2.where('messages.address', 'LIKE', address).orWhere('messages.source', address);
+            });
           if (agency != '')
             qb.whereIn('messages.alias_id', function (qb2) {
               qb2.select('id').from('capcodes').where('agency', agency).where('ignore', 0);
@@ -632,6 +662,11 @@ router.route('/messageSearch')
           if (alias != '')
             qb.where('messages.alias_id',alias);
         }
+        // Outside the branches above, so it applies to the full-text search and
+        // the structured search alike. On sqlite the FTS branch already joins
+        // messages, so this filters correctly after MATCH narrows the set -
+        // no change to the virtual table is needed.
+        if (systemFilter) qb.whereIn('messages.system_id', systemFilter);
       }).orderBy('messages.timestamp', 'desc')
       .then((rows) => {
         if (rows) {
@@ -798,6 +833,140 @@ router.route('/capcodes')
       logger.main.debug(util.format('%o', req.body || 'no request body'));
     } else {
       res.status(500).json({ message: 'Error - address or alias missing' });
+    }
+  });
+
+// Paging systems.
+//
+// The list is guarded with isLoggedInMessages, not isAdmin: it drives the
+// system selector on the message list, which every viewer sees, and under
+// apiSecurity=false that includes anonymous ones. /api/capcodes/agency is
+// admin-only yet the front end calls it from the message view, which is a bug
+// worth not repeating.
+router.route('/systems')
+  .get(authHelper.isLoggedInMessages, function (req, res, next) {
+    systems.enabled()
+      .then((rows) => {
+        res.status(200).json(rows);
+      })
+      .catch((err) => {
+        logger.main.error(err);
+        return next(err);
+      })
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    var name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ message: 'Error - name is required' });
+    try {
+      var existing = await db('systems').where('name', name).first();
+      if (existing) return res.status(400).json({ message: 'Error - a system with that name already exists' });
+      var record = {
+        name: name.substring(0, 64),
+        label: (req.body.label || name).substring(0, 255),
+        color: req.body.color || null,
+        enabled: req.body.enabled == 0 ? 0 : 1,
+        sortorder: parseInt(req.body.sortorder, 10) || 0,
+        is_default: 0
+      };
+      var result = await db('systems').insert(record).returning('id');
+      var id = Array.isArray(result) ? result[0] : result;
+      // Exactly one row is the default; setting one clears the rest.
+      if (req.body.is_default == 1) {
+        await db('systems').update('is_default', 0);
+        await db('systems').where('id', id).update('is_default', 1);
+      }
+      systems.invalidate();
+      res.status(200).json({ status: 'ok', id: id });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(500).send(err);
+    }
+  });
+
+router.route('/systems/:id')
+  .get(authHelper.isAdmin, function (req, res, next) {
+    if (req.params.id == 'new') {
+      return res.status(200).json({ id: '', name: '', label: '', color: 'grey', enabled: 1, is_default: 0, sortorder: 0 });
+    }
+    db('systems').where('id', req.params.id).first()
+      .then((row) => {
+        res.status(200).json(row || {});
+      })
+      .catch((err) => {
+        logger.main.error(err);
+        return next(err);
+      })
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    var id = req.params.id;
+    try {
+      if (id == 'new') {
+        var name = (req.body.name || '').trim();
+        if (!name) return res.status(400).json({ message: 'Error - name is required' });
+        var clash = await db('systems').where('name', name).first();
+        if (clash) return res.status(400).json({ message: 'Error - a system with that name already exists' });
+        var inserted = await db('systems').insert({
+          name: name.substring(0, 64),
+          label: (req.body.label || name).substring(0, 255),
+          color: req.body.color || null,
+          enabled: req.body.enabled == 0 ? 0 : 1,
+          sortorder: parseInt(req.body.sortorder, 10) || 0,
+          is_default: 0
+        }).returning('id');
+        id = Array.isArray(inserted) ? inserted[0] : inserted;
+      } else {
+        var current = await db('systems').where('id', id).first();
+        if (!current) return res.status(404).json({ message: 'Error - no such system' });
+        var newName = (req.body.name || current.name).trim();
+        var nameClash = await db('systems').where('name', newName).whereNot('id', id).first();
+        if (nameClash) return res.status(400).json({ message: 'Error - a system with that name already exists' });
+        await db('systems').where('id', id).update({
+          name: newName.substring(0, 64),
+          label: (req.body.label || newName).substring(0, 255),
+          color: req.body.color || null,
+          enabled: req.body.enabled == 0 ? 0 : 1,
+          sortorder: parseInt(req.body.sortorder, 10) || 0
+        });
+      }
+      if (req.body.is_default == 1) {
+        await db('systems').update('is_default', 0);
+        await db('systems').where('id', id).update('is_default', 1);
+      }
+      systems.invalidate();
+      res.status(200).json({ status: 'ok', id: id });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(500).send(err);
+    }
+  })
+  .delete(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('systems').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Error - no such system' });
+      // These guards are the only referential integrity there is: knex 0.16
+      // ignores .references() when altering a sqlite table, and sqlite does not
+      // enforce foreign keys without the pragma. Deleting a referenced system
+      // would leave capcodes and messages pointing at nothing, invisible to
+      // every filtered view.
+      if (row.is_default == 1) {
+        return res.status(400).json({ message: 'Error - the default system cannot be deleted' });
+      }
+      var capcodeCount = await db('capcodes').where('system_id', req.params.id).count('id as count').first();
+      var messageCount = await db('messages').where('system_id', req.params.id).count('id as count').first();
+      var capcodes = Number(capcodeCount.count || 0);
+      var messages = Number(messageCount.count || 0);
+      if (capcodes > 0 || messages > 0) {
+        return res.status(400).json({
+          message: 'Error - system still has ' + capcodes + ' alias(es) and ' + messages +
+            ' message(s). Reassign or delete them first.'
+        });
+      }
+      await db('systems').where('id', req.params.id).del();
+      systems.invalidate();
+      res.status(200).json({ status: 'ok' });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(500).send(err);
     }
   });
 

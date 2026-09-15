@@ -1,0 +1,347 @@
+process.env.NODE_ENV = 'test';
+
+// The acceptance tests for multi-system support.
+//
+// The premise of the whole feature is that a CAPCODE address is only unique
+// within a paging system: address 0001000 is "West York" on one network and
+// "Life Team EMS" on another. Before this, capcodes.address was matched
+// globally, so one of those two silently won for every message. Everything here
+// is a regression test against that returning.
+
+const chai = require('chai');
+
+const should = chai.should();
+const chaiHttp = require('chai-http');
+
+chai.use(chaiHttp);
+
+const confFile = './config/config.json';
+const nconf = require('nconf');
+
+nconf.file({ file: confFile });
+nconf.load();
+
+const passportStub = require('passport-stub');
+// eslint-disable-next-line vars-on-top
+var server = require('../app');
+const db = require('../knex/knex.js');
+const systems = require('../lib/systems');
+const refreshAliasIds = require('../lib/aliasrefresh');
+
+passportStub.install(server);
+
+// Keys used by these tests. Written into the live test config in before(), and
+// removed again afterwards, so the rest of the suite sees the config it expects.
+const KEY_A = 'multisystem-key-system-a';
+const KEY_B = 'multisystem-key-system-b';
+const KEY_SHARED = 'multisystem-key-shared';
+const KEY_NOSYSTEM = 'multisystem-key-no-system';
+
+let originalKeys;
+let originalDupeFiltering;
+
+before(() => {
+        originalKeys = nconf.get('auth:keys') || [];
+        originalDupeFiltering = nconf.get('messages:duplicateFiltering');
+});
+
+after(() => {
+        nconf.set('auth:keys', originalKeys);
+        nconf.set('messages:duplicateFiltering', originalDupeFiltering);
+        nconf.save();
+});
+
+// Every test file's root-level hooks run for every test in the whole suite, in
+// file-load order - so a file loaded after this one re-runs the schema rollback
+// and reseed, destroying anything set up in a root hook here. Both the config
+// keys and the fixture rows therefore live in a describe-scoped hook, which
+// mocha runs after all root-level hooks.
+function installTestKeys() {
+        const base = (originalKeys || []).filter(k => k.key !== KEY_A && k.key !== KEY_B &&
+                k.key !== KEY_SHARED && k.key !== KEY_NOSYSTEM);
+        nconf.set('auth:keys', base.concat([
+                { name: 'system-a-reader', key: KEY_A, system: 'Default' },
+                { name: 'system-b-reader', key: KEY_B, system: 'Second' },
+                {
+                        name: 'shared-reader',
+                        key: KEY_SHARED,
+                        system: 'Default',
+                        allowSourceOverride: true,
+                        systems: ['Default', 'Second'],
+                },
+                // Deliberately has no `system`: this is the state every API key
+                // in every existing install is in immediately after the
+                // migration and before anyone edits config.json.
+                { name: 'legacy-reader', key: KEY_NOSYSTEM },
+        ]));
+        nconf.save();
+}
+
+// Schema and base fixtures, matching the convention in the other test files.
+// When this file runs alongside others, the last file's copy of this hook wins;
+// the describe-scoped fixture below then runs after all of them.
+beforeEach(() => db.migrate.rollback().then(() => db.migrate.latest()).then(() => db.seed.run()));
+
+function installFixture() {
+        installTestKeys();
+        // The seed may not have run since the last rollback if another file's
+        // hooks reset the schema after this file's, so make sure the systems
+        // exist before inserting capcodes against them.
+        return db('systems').count('id as count').then(rows => {
+                const count = Number(rows[0].count || 0);
+                if (count) return null;
+                return db.seed.run();
+        })
+        // The colliding capcode that gives the feature its reason to exist:
+        // the same address in both systems, with different agency and alias.
+        .then(() => db('capcodes').insert([
+                {
+                        address: '0001000',
+                        alias: 'West York',
+                        agency: '1-FIRE',
+                        icon: 'fire',
+                        color: 'red',
+                        ignore: 0,
+                        system_id: 1,
+                },
+                {
+                        address: '0001000',
+                        alias: 'Life Team EMS',
+                        agency: '1-EMS',
+                        icon: 'ambulance',
+                        color: 'green',
+                        ignore: 0,
+                        system_id: 2,
+                },
+                // Wildcard: '_' is a LIKE wildcard, not a literal.
+                {
+                        address: '013044_',
+                        alias: 'Wildcard Station',
+                        agency: 'CUMB',
+                        icon: 'fire',
+                        color: 'blue',
+                        ignore: 0,
+                        system_id: 2,
+                },
+        ]));
+}
+
+afterEach(() => db.migrate.rollback().then(() => passportStub.logout()));
+
+function post(key, body) {
+        return chai
+                .request(server)
+                .post('/api/messages')
+                .set({ 'X-Requested-With': 'XMLHttpRequest', 'User-Agent': 'CI-Test', apikey: key })
+                .send(body);
+}
+
+// The stored message joined to the capcode it resolved to.
+function storedMessage(id) {
+        return db('messages')
+                .leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                .select('messages.id', 'messages.address', 'messages.system_id', 'messages.alias_id',
+                        'capcodes.alias', 'capcodes.agency')
+                .where('messages.id', id)
+                .first();
+}
+
+describe('Multi-system support', () => {
+        beforeEach(() => installFixture());
+
+describe('Multi-system ingest', () => {
+        it('resolves the same capcode to each system\'s own alias', async () => {
+                const resA = await post(KEY_A, {
+                        address: '0001000', message: 'Structure fire', datetime: 1700000001, source: 'reader-a',
+                });
+                resA.status.should.eql(200);
+                const resB = await post(KEY_B, {
+                        address: '0001000', message: 'Medical call', datetime: 1700000002, source: 'reader-b',
+                });
+                resB.status.should.eql(200);
+
+                const a = await storedMessage(Number(resA.text));
+                const b = await storedMessage(Number(resB.text));
+
+                // This is the whole point of the project.
+                a.system_id.should.eql(1);
+                a.alias.should.eql('West York');
+                a.agency.should.eql('1-FIRE');
+
+                b.system_id.should.eql(2);
+                b.alias.should.eql('Life Team EMS');
+                b.agency.should.eql('1-EMS');
+        });
+
+        it('stores an identical message from two systems as two messages', async () => {
+                nconf.set('messages:duplicateFiltering', true);
+                nconf.set('messages:duplicateLimit', 25);
+                nconf.set('messages:duplicateTime', 300);
+                nconf.save();
+
+                const body = { address: '0001000', message: 'IDENTICAL TEXT', datetime: 1700000010 };
+                const resA = await post(KEY_A, Object.assign({}, body, { source: 'reader-a' }));
+                const resB = await post(KEY_B, Object.assign({}, body, { source: 'reader-b' }));
+
+                // Both must be stored: they are two real pages on two networks
+                // that happen to read the same, not a duplicate.
+                const rows = await db('messages').where('message', 'IDENTICAL TEXT').select('system_id');
+                rows.length.should.eql(2);
+                rows.map(r => r.system_id).sort().should.eql([1, 2]);
+
+                // ...and a genuine duplicate within one system is still dropped.
+                const dupe = await post(KEY_A, Object.assign({}, body, { source: 'reader-a' }));
+                dupe.text.should.eql('Ignoring duplicate');
+                const after = await db('messages').where('message', 'IDENTICAL TEXT').select('id');
+                after.length.should.eql(2);
+
+                should.exist(resA);
+                should.exist(resB);
+                nconf.set('messages:duplicateFiltering', originalDupeFiltering);
+                nconf.save();
+        });
+
+        it('stores unmatched traffic against the posting system', async () => {
+                const res = await post(KEY_B, {
+                        address: '9999999', message: 'No capcode for this', datetime: 1700000020, source: 'reader-b',
+                });
+                const row = await storedMessage(Number(res.text));
+                // Unmatched traffic is real, and is exactly what an operator
+                // looks at when onboarding a system - so it has to stay
+                // attributable even with no alias.
+                should.not.exist(row.alias_id);
+                row.system_id.should.eql(2);
+        });
+
+        it('still matches wildcard capcodes within a system', async () => {
+                const res = await post(KEY_B, {
+                        address: '0130441', message: 'Wildcard match', datetime: 1700000030, source: 'reader-b',
+                });
+                const row = await storedMessage(Number(res.text));
+                row.alias.should.eql('Wildcard Station');
+                row.system_id.should.eql(2);
+        });
+
+        it('lands a key with no system configured in the default system', async () => {
+                // The upgrade guarantee: an un-migrated config must not fail
+                // ingest, and must not store a null system_id.
+                const res = await post(KEY_NOSYSTEM, {
+                        address: '0001000', message: 'Legacy reader', datetime: 1700000040, source: 'legacy',
+                });
+                res.status.should.eql(200);
+                const row = await storedMessage(Number(res.text));
+                row.system_id.should.eql(1);
+                row.alias.should.eql('West York');
+        });
+
+        it('honours source override only for names the key permits', async () => {
+                const override = await post(KEY_SHARED, {
+                        address: '0001000', message: 'Routed by source', datetime: 1700000050, source: 'Second',
+                });
+                (await storedMessage(Number(override.text))).system_id.should.eql(2);
+
+                // A source the key does not list falls back to the key's own
+                // system rather than being honoured.
+                const rejected = await post(KEY_SHARED, {
+                        address: '0001000', message: 'Not permitted', datetime: 1700000051, source: 'Somewhere Else',
+                });
+                (await storedMessage(Number(rejected.text))).system_id.should.eql(1);
+        });
+
+        it('does not let a key without override select a system by source', async () => {
+                const res = await post(KEY_A, {
+                        address: '0001000', message: 'Trying to cross over', datetime: 1700000060, source: 'Second',
+                });
+                (await storedMessage(Number(res.text))).system_id.should.eql(1);
+        });
+});
+
+describe('Multi-system alias refresh', () => {
+        it('does not re-point another system\'s messages', async () => {
+                await post(KEY_A, { address: '0001000', message: 'A message', datetime: 1700000100, source: 'a' });
+                await post(KEY_B, { address: '0001000', message: 'B message', datetime: 1700000101, source: 'b' });
+
+                const bCapcode = await db('capcodes').where({ address: '0001000', system_id: 2 }).first();
+
+                // Edit system A's alias, then refresh everything.
+                await db('capcodes').where({ address: '0001000', system_id: 1 }).update({ alias: 'West York Renamed' });
+                await refreshAliasIds();
+
+                const rows = await db('messages')
+                        .leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                        .select('messages.system_id', 'capcodes.alias', 'messages.alias_id')
+                        .whereIn('messages.message', ['A message', 'B message']);
+
+                const a = rows.find(r => r.system_id === 1);
+                const b = rows.find(r => r.system_id === 2);
+                a.alias.should.eql('West York Renamed');
+                // The damaging failure mode: B's messages silently re-pointed
+                // at A's capcode.
+                b.alias.should.eql('Life Team EMS');
+                b.alias_id.should.eql(bCapcode.id);
+        });
+
+        it('limits a per-address refresh to the given system', async () => {
+                // Distinct text per test: the duplicate-filter buffer is a
+                // module global that outlives the per-test schema rollback, so
+                // reusing a message body here would be dropped as a duplicate.
+                await post(KEY_A, { address: '0001000', message: 'A scoped message', datetime: 1700000110, source: 'a' });
+                await post(KEY_B, { address: '0001000', message: 'B scoped message', datetime: 1700000111, source: 'b' });
+
+                // Break both messages' alias_id, then refresh system 1 only.
+                await db('messages').whereIn('message', ['A scoped message', 'B scoped message']).update({ alias_id: null });
+                await refreshAliasIds({ address: '0001000', systemId: 1 });
+
+                const a = await db('messages').where('message', 'A scoped message').first();
+                const b = await db('messages').where('message', 'B scoped message').first();
+                should.exist(a.alias_id);
+                should.not.exist(b.alias_id);
+        });
+});
+
+describe('GET /api/capcodeCheck/:id', () => {
+        it('does not report a cross-system address as a duplicate', done => {
+                passportStub.login({ username: 'adminactive', password: 'changeme', role: 'admin' });
+                chai.request(server)
+                        // Session admin with no system named resolves to the
+                        // default system, where 013044_ does not exist - it is
+                        // system 2's capcode.
+                        .get('/api/capcodeCheck/013044_')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(200);
+                                // An empty id means "free to use", which is what
+                                // allows the same address in another system.
+                                res.body.should.have.property('id').eql('');
+                                done();
+                        });
+        });
+
+        it('still reports a duplicate within the same system', done => {
+                passportStub.login({ username: 'adminactive', password: 'changeme', role: 'admin' });
+                chai.request(server)
+                        .get('/api/capcodeCheck/013044_?system_id=2')
+                        .end((err, res) => {
+                                should.not.exist(err);
+                                res.status.should.eql(200);
+                                res.body.should.have.property('alias').eql('Wildcard Station');
+                                done();
+                        });
+        });
+});
+
+describe('lib/systems', () => {
+        it('parses a comma-separated system filter', () => {
+                should.equal(systems.parseFilter(undefined), null);
+                should.equal(systems.parseFilter(''), null);
+                systems.parseFilter('1').should.eql([1]);
+                systems.parseFilter('1,2').should.eql([1, 2]);
+                systems.parseFilter(' 1 , 2 ').should.eql([1, 2]);
+                // Garbage yields null - "apply no filter" - rather than an
+                // empty list, which callers would turn into a whereIn that
+                // matches nothing and an empty message list.
+                should.equal(systems.parseFilter('nonsense'), null);
+        });
+});
+
+});

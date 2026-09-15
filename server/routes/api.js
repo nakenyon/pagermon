@@ -24,39 +24,36 @@ router.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 const passport = require('../auth/local');
 var authHelper = require('../middleware/authhelper')
 var passwordpolicy = require('../lib/passwordpolicy')
+// Shared with the mysql alias-refresh cron in app.js. It used to be duplicated
+// in both, and the system predicate it now carries has to be in both.
+var refreshAliasIds = require('../lib/aliasrefresh')
+var systems = require('../lib/systems')
 
-// Recomputes messages.alias_id from the capcodes table: for each message, the
-// most specific capcode whose address pattern the message's address matches.
-// REPLACE(address,'_','%') DESC is what makes "most specific" work - it sorts
-// literal digits above the '_' wildcard.
+// The projection sent to non-admin viewers when HideCapcode is on: everything
+// except `address`, which is the capcode being hidden.
 //
-// Measured against a copy of a real 47,827-row messages.db before changing this:
-// the single whole-table UPDATE takes ~2.7s. Splitting it into one statement per
-// distinct address (450 of them) produced byte-identical alias_id values but took
-// ~5.2s, and held the write lock for the whole run - so the original shape stays.
-// sqlite keeps the 67-row capcodes table in page cache and the per-row subquery
-// is cheap; the statement overhead of the alternative is not.
-//
-// `address` limits the update to one address; omit it to refresh everything.
-function refreshAliasIds(address) {
-  var dbtype = nconf.get('database:type');
-  return db('messages')
-    .update('alias_id', function () {
-      this.select('id')
-        .from('capcodes')
-        .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
-        .modify(function (queryBuilder) {
-          if (dbtype == 'oracledb')
-            queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
-          else
-            queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`);
-        })
-        .limit(1);
-    })
-    .modify(function (queryBuilder) {
-      if (typeof address !== 'undefined')
-        queryBuilder.where(db.ref('messages.address'), '=', address);
-    });
+// This existed as five hand-maintained copies of the same object literal - two
+// on read paths and three in the socket emit block - which is how a field added
+// to one ends up missing from another. The system fields are carried here
+// because clients filter and badge on them; they are not sensitive, and a row
+// without them cannot be matched against the viewer's system selection.
+function withoutCapcode(row) {
+  return {
+    "id": row.id,
+    "message": row.message,
+    "source": row.source,
+    "timestamp": row.timestamp,
+    "alias_id": row.alias_id,
+    "alias": row.alias,
+    "agency": row.agency,
+    "icon": row.icon,
+    "color": row.color,
+    "ignore": row.ignore,
+    "system_id": row.system_id,
+    "system_name": row.system_name,
+    "system_label": row.system_label,
+    "system_color": row.system_color
+  };
 }
 
 router.use(function (req, res, next) {
@@ -168,18 +165,7 @@ router.route('/messages')
                 //outRow = JSON.parse(newrow);
                 if (HideCapcode) {
                   if (!req.isAuthenticated() || (req.isAuthenticated() && req.user.role == 'user')) {
-                    row = {
-                      "id": row.id,
-                      "message": row.message,
-                      "source": row.source,
-                      "timestamp": row.timestamp,
-                      "alias_id": row.alias_id,
-                      "alias": row.alias,
-                      "agency": row.agency,
-                      "icon": row.icon,
-                      "color": row.color,
-                      "ignore": row.ignore
-                    };
+                    row = withoutCapcode(row);
                   }
                 }
                 if (row) {
@@ -226,12 +212,38 @@ router.route('/messages')
       var data = req.body;
       data.pluginData = {};
 
+      // Which paging system this message belongs to. The API key is the
+      // authority; see lib/systems.js for the full resolution order and why a
+      // key with no system configured must still succeed.
+      var systemRow = null;
+      try {
+        systemRow = await systems.resolveForPost(req.user, data);
+      } catch (err) {
+        logger.main.error('Could not resolve system for incoming message: ' + err);
+        return res.status(500).json({ message: 'Error - could not resolve paging system' });
+      }
+      if (!systemRow) {
+        // Only reachable if the systems table is empty, i.e. the migration did
+        // not complete. Storing the message with a null system_id would make it
+        // invisible to every filtered view, so refuse it instead: the reader
+        // will retry and the operator gets a loud error.
+        logger.main.error('No paging systems are defined - refusing message. Check that database migrations completed.');
+        return res.status(500).json({ message: 'Error - no paging systems defined' });
+      }
+      var systemId = systemRow.id;
+      // Plugins can route per-system, in the same way the per-alias pluginconf
+      // mechanism lets them route per-alias.
+      data.pluginData.system = { id: systemRow.id, name: systemRow.name, label: systemRow.label };
+
       if (filterDupes) {
         // this is a bad solution and tech debt that will bite us in the ass if we ever go HA, but that's a problem for future me and that guy's a dick
         var datetime = data.datetime || 1;
         var timeDiff = datetime - dupeTime;
         // if duplicate filtering is enabled, we want to populate the message buffer and check for duplicates within the limits
-        var matches = _.where(msgBuffer, { message: data.message, address: data.address });
+        // Scoped by system: two networks sending an identical message in the
+        // same window are two real pages, not a duplicate, and without this
+        // they cross-suppress each other.
+        var matches = _.where(msgBuffer, { message: data.message, address: data.address, system_id: systemId });
         if (matches.length > 0) {
           if (dupeTime != 0) {
             // search the matching messages and see if any match the time constrain
@@ -254,7 +266,7 @@ router.route('/messages')
         if (msgBuffer.length > dupeArrayLimit) {
           msgBuffer.shift();
         }
-        msgBuffer.push({ message: data.message, datetime: data.datetime, address: data.address });
+        msgBuffer.push({ message: data.message, datetime: data.datetime, address: data.address, system_id: systemId });
       }
 
       // send data to pluginHandler before proceeding
@@ -293,6 +305,7 @@ router.route('/messages')
               })
                 .andWhere('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             } else if ((dupeLimit != 0) && (dupeTime == 0)) {
               queryBuilder.where('id', 'in', function () {
                 this.select('*')
@@ -307,6 +320,7 @@ router.route('/messages')
               })
                 .andWhere('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             } else if ((dupeLimit == 0) && (dupeTime != 0)) {
               queryBuilder.where('id', 'in', function () {
                 this.select('id')
@@ -315,9 +329,11 @@ router.route('/messages')
               })
                 .andWhere('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             } else {
               queryBuilder.where('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             }
           })
           .then((row) => {
@@ -327,6 +343,10 @@ router.route('/messages')
             } else {
               db.from('capcodes')
                 .select('id', 'ignore')
+                // Scoped to the posting system: the same address means
+                // different agencies on different networks, so an unscoped
+                // match resolves to an arbitrary one of them.
+                .where('system_id', '=', systemId)
                 // TODO: test this doesn't break other DBs - there's a lot of quote changes here
                 .modify(function (queryBuilder) {
                   if (dbtype == 'oracledb') {
@@ -337,6 +357,9 @@ router.route('/messages')
                     queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`)
                   }
                 })
+                // Only the most specific match is used; fetching the rest and
+                // discarding them was pure waste.
+                .limit(1)
                 .then((row) => {
                   var insert;
                   var alias_id = null;
@@ -359,7 +382,7 @@ router.route('/messages')
                   }
 
                   if (insert == true) {
-                    var insertmsg = { address: address, message: message, timestamp: datetime, source: source, alias_id: alias_id }
+                    var insertmsg = { address: address, message: message, timestamp: datetime, source: source, alias_id: alias_id, system_id: systemId }
                     db('messages').insert(insertmsg).returning('id')
                       .then((result) => {
                         // emit the full message
@@ -384,9 +407,13 @@ router.route('/messages')
                         }
 
                         db.from('messages')
-                          .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', 'capcodes.pluginconf')
+                          .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', 'capcodes.pluginconf',
+                            'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
                           .modify(function (queryBuilder) {
                             queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                            // So the socket payload carries the system and
+                            // clients can filter and badge without a lookup.
+                            queryBuilder.leftJoin('systems', 'systems.id', '=', 'messages.system_id')
                           })
                           .where('messages.id', '=', msgId)
                           .then((row) => {
@@ -414,53 +441,20 @@ router.route('/messages')
                                       req.io.of('adminio').emit('messagePost', row);
                                       if (row.alias_id != null) {
                                         // send to normal user as well if not null alias_id
-                                        rowuser = {
-                                          "id": row.id,
-                                          "message": row.message,
-                                          "source": row.source,
-                                          "timestamp": row.timestamp,
-                                          "alias_id": row.alias_id,
-                                          "alias": row.alias,
-                                          "agency": row.agency,
-                                          "icon": row.icon,
-                                          "color": row.color,
-                                          "ignore": row.ignore
-                                        };
+                                        rowuser = withoutCapcode(row);
                                         req.io.emit('messagePost', rowuser);
                                       }
                                     } else {
                                       // if AdminShow not on only send if not null alias_id
                                       if (row.alias_id != null) {
                                         req.io.of('adminio').emit('messagePost', row);
-                                        rowuser = {
-                                          "id": row.id,
-                                          "message": row.message,
-                                          "source": row.source,
-                                          "timestamp": row.timestamp,
-                                          "alias_id": row.alias_id,
-                                          "alias": row.alias,
-                                          "agency": row.agency,
-                                          "icon": row.icon,
-                                          "color": row.color,
-                                          "ignore": row.ignore
-                                        };
+                                        rowuser = withoutCapcode(row);
                                         req.io.emit('messagePost', rowuser);
                                       }
                                     }
                                   } else {
                                     req.io.of('adminio').emit('messagePost', row);
-                                    rowuser = {
-                                      "id": row.id,
-                                      "message": row.message,
-                                      "source": row.source,
-                                      "timestamp": row.timestamp,
-                                      "alias_id": row.alias_id,
-                                      "alias": row.alias,
-                                      "agency": row.agency,
-                                      "icon": row.icon,
-                                      "color": row.color,
-                                      "ignore": row.ignore
-                                    };
+                                    rowuser = withoutCapcode(row);
                                     req.io.emit('messagePost', rowuser);
                                   }
                                 } else {
@@ -527,24 +521,15 @@ router.route('/messages/:id')
     var id = req.params.id;
 
     db.from('messages')
-      .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'))
+      .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'),
+        'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
       .leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+      .leftJoin('systems', 'systems.id', '=', 'messages.system_id')
       .where('messages.id', id)
       .then((row) => {
         if (HideCapcode) {
           if (!req.isAuthenticated() || (req.isAuthenticated() && req.user.role == 'user')) {
-            row = {
-              "id": row[0].id,
-              "message": row[0].message,
-              "source": row[0].source,
-              "timestamp": row[0].timestamp,
-              "alias_id": row[0].alias_id,
-              "alias": row[0].alias,
-              "agency": row[0].agency,
-              "icon": row[0].icon,
-              "color": row[0].color,
-              "ignore": row[0].ignore
-            };
+            row = withoutCapcode(row[0]);
           }
         }
         if (row.ignore == 1) {
@@ -653,18 +638,7 @@ router.route('/messageSearch')
           for (row of rows) {
             if (HideCapcode) {
               if (!req.isAuthenticated() || (req.isAuthenticated() && req.user.role == 'user')) {
-                row = {
-                  "id": row.id,
-                  "message": row.message,
-                  "source": row.source,
-                  "timestamp": row.timestamp,
-                  "alias_id": row.alias_id,
-                  "alias": row.alias,
-                  "agency": row.agency,
-                  "icon": row.icon,
-                  "color": row.color,
-                  "ignore": row.ignore
-                };
+                row = withoutCapcode(row);
               }
             }
             if (pdwMode) {
@@ -747,9 +721,12 @@ router.route('/capcodes')
   .get(authHelper.isAdmin, function (req, res, next) {
     nconf.load();
     var dbtype = nconf.get('database:type');
+    var systemFilter = systems.parseFilter(req.query.system);
     db.from('capcodes')
-      .select('*')
+      .select('capcodes.*', 'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
+      .leftJoin('systems', 'systems.id', '=', 'capcodes.system_id')
       .modify(function (queryBuilder) {
+        if (systemFilter) queryBuilder.whereIn('capcodes.system_id', systemFilter);
         if (dbtype == 'oracledb')
           queryBuilder.orderByRaw(`REPLACE("address", '_', '%')`);
         else
@@ -763,7 +740,7 @@ router.route('/capcodes')
         return next(err);
       })
   })
-  .post(authHelper.isAdmin, function (req, res, next) {
+  .post(authHelper.isAdmin, async function (req, res, next) {
     nconf.load();
     var updateRequired = nconf.get('database:aliasRefreshRequired');
     if (req.body.address && req.body.alias) {
@@ -775,31 +752,35 @@ router.route('/capcodes')
       var icon = req.body.icon || 'question';
       var ignore = req.body.ignore || 0;
       var pluginconf = JSON.stringify(req.body.pluginconf) || "{}";
+      // An alias belongs to exactly one system. Resolved through the shared
+      // helper so an omitted system_id lands in the default system rather than
+      // creating a capcode that no ingest can ever match.
+      var systemId;
+      try {
+        var systemRow = await systems.resolveForPost(req.user, req.body);
+        systemId = systemRow ? systemRow.id : null;
+      } catch (err) {
+        logger.main.error(err);
+        return res.status(500).send(err);
+      }
+      var record = {
+        id: id,
+        address: address,
+        alias: alias,
+        agency: agency,
+        color: color,
+        icon: icon,
+        ignore: ignore,
+        pluginconf: pluginconf,
+        system_id: systemId
+      };
       db.from('capcodes')
         .where('id', '=', id)
         .modify(function (queryBuilder) {
           if (id == null) {
-            queryBuilder.insert({
-              id: id,
-              address: address,
-              alias: alias,
-              agency: agency,
-              color: color,
-              icon: icon,
-              ignore: ignore,
-              pluginconf: pluginconf
-            })
+            queryBuilder.insert(record)
           } else {
-            queryBuilder.update({
-              id: id,
-              address: address,
-              alias: alias,
-              agency: agency,
-              color: color,
-              icon: icon,
-              ignore: ignore,
-              pluginconf: pluginconf
-            })
+            queryBuilder.update(record)
           }
         })
         .returning('id')
@@ -858,7 +839,8 @@ router.route('/capcodes/:id')
       "icon": "question",
       "color": "black",
       "ignore": 0,
-      "pluginconf": {}
+      "pluginconf": {},
+      "system_id": null
     };
     if (id == 'new') {
       res.status(200).json(defaults);
@@ -881,7 +863,7 @@ router.route('/capcodes/:id')
         })
     }
   })
-  .post(authHelper.isAdmin, function (req, res, next) {
+  .post(authHelper.isAdmin, async function (req, res, next) {
     var dbtype = nconf.get('database:type');
     var id = req.params.id || req.body.id || null;
     nconf.load();
@@ -919,6 +901,25 @@ router.route('/capcodes/:id')
         var ignore = req.body.ignore || 0;
         var pluginconf = JSON.stringify(req.body.pluginconf) || "{}";
         var updateAlias = req.body.updateAlias || 0;
+        var systemId;
+        try {
+          var systemRow = await systems.resolveForPost(req.user, req.body);
+          systemId = systemRow ? systemRow.id : null;
+        } catch (err) {
+          logger.main.error(err);
+          return res.status(500).send(err);
+        }
+        var record = {
+          id: id,
+          address: address,
+          alias: alias,
+          agency: agency,
+          color: color,
+          icon: icon,
+          ignore: ignore,
+          pluginconf: pluginconf,
+          system_id: systemId
+        };
 
         console.time('insert');
         db.from('capcodes')
@@ -926,27 +927,9 @@ router.route('/capcodes/:id')
           .where('id', '=', id)
           .modify(function (queryBuilder) {
             if (id == null) {
-              queryBuilder.insert({
-                id: id,
-                address: address,
-                alias: alias,
-                agency: agency,
-                color: color,
-                icon: icon,
-                ignore: ignore,
-                pluginconf: pluginconf
-              })
+              queryBuilder.insert(record)
             } else {
-              queryBuilder.update({
-                id: id,
-                address: address,
-                alias: alias,
-                agency: agency,
-                color: color,
-                icon: icon,
-                ignore: ignore,
-                pluginconf: pluginconf
-              })
+              queryBuilder.update(record)
             }
           })
           .then((result) => {
@@ -970,7 +953,10 @@ router.route('/capcodes/:id')
               if (specificRefresh && /^\d+$/.test(req.body.address)) {
                 //Refresh this specific Alias
                 console.time('updateMap');
-                refreshAliasIds(req.body.address)
+                // Scoped to the edited capcode's own system: only that system's
+                // messages can be affected by the edit, and bounding the update
+                // keeps one system's admin activity off another's rows.
+                refreshAliasIds({ address: req.body.address, systemId: systemId })
                 .catch((err) => {
                   logger.main.error(err);
                 })
@@ -1021,11 +1007,25 @@ router.route('/capcodes/:id')
   });
 
 router.route('/capcodeCheck/:id')
-  .get(authHelper.isAdmin, function (req, res, next) {
+  .get(authHelper.isAdmin, async function (req, res, next) {
     var id = req.params.id;
+    // "Does this address already exist" is only meaningful within a system:
+    // the same address in two systems is the legitimate case this feature
+    // exists to support, so an unscoped check would block it as a duplicate.
+    var systemId = null;
+    try {
+      var systemRow = await systems.resolveForPost(req.user, req.query);
+      systemId = systemRow ? systemRow.id : null;
+    } catch (err) {
+      logger.main.error(err);
+      return next(err);
+    }
     db.from('capcodes')
       .select('*')
       .where('address', id)
+      .modify(function (queryBuilder) {
+        if (systemId !== null) queryBuilder.where('system_id', systemId);
+      })
       .then((row) => {
         if (row.length > 0) {
           row = row[0]
@@ -1040,7 +1040,8 @@ router.route('/capcodeCheck/:id')
             "icon": "question",
             "color": "black",
             "ignore": 0,
-            "pluginconf": {}
+            "pluginconf": {},
+            "system_id": systemId
           };
           res.status(200).json(row);
         }
@@ -1078,7 +1079,10 @@ router.route('/capcodeExport')
     var dbtype = nconf.get('database:type');
     var filename = 'export.csv'
     db.from('capcodes')
-      .select('*')
+      // system name rather than system_id: ids are install-specific, and an
+      // export is meant to be portable to another instance.
+      .select('capcodes.*', 'systems.name as system')
+      .leftJoin('systems', 'systems.id', '=', 'capcodes.system_id')
       .modify(function (queryBuilder) {
         if (dbtype == 'oracledb')
           queryBuilder.orderByRaw(`REPLACE("address", '_', '%')`);
@@ -1114,6 +1118,11 @@ router.route('/capcodeImport')
         var header = data[0]
         if (('address' in header) && ('alias' in header)) {
           //this checks if the csv has the required headings, should replace this with some form of proper validation
+          // A CSV without a `system` column - i.e. one exported before this
+          // feature - imports into the system the request resolves to, which
+          // for a session admin is the default system.
+          var fallbackSystem = await systems.resolveForPost(req.user, req.body || {});
+          var fallbackSystemId = fallbackSystem ? fallbackSystem.id : null;
           for await (capcode of data) {
             var address = capcode.address || 0;
             var alias = capcode.alias || 'null';
@@ -1122,9 +1131,15 @@ router.route('/capcodeImport')
             var icon = capcode.icon || 'question';
             var ignore = capcode.ignore || 0;
             var pluginconf = JSON.stringify(capcode.pluginconf) || "{}";
+            var namedSystem = capcode.system ? await systems.byName(capcode.system) : null;
+            var systemId = namedSystem ? namedSystem.id : fallbackSystemId;
+            // Matched on (system_id, address), not address alone: the same
+            // address in another system is a different alias, and matching it
+            // here would overwrite that system's data.
             await db('capcodes')
               .returning('id')
               .where('address', '=', address)
+              .where('system_id', '=', systemId)
               .first()
               .then((rows) => {
                 if (rows) {
@@ -1138,7 +1153,8 @@ router.route('/capcodeImport')
                       color: color,
                       icon: icon,
                       ignore: ignore,
-                      pluginconf: pluginconf
+                      pluginconf: pluginconf,
+                      system_id: systemId
                     })
                     .then((result) => {
                       importresults.push({
@@ -1164,7 +1180,8 @@ router.route('/capcodeImport')
                     color: color,
                     icon: icon,
                     ignore: ignore,
-                    pluginconf: pluginconf
+                    pluginconf: pluginconf,
+                    system_id: systemId
                   })
                     .then((result) => {
                       importresults.push({

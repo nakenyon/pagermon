@@ -152,6 +152,50 @@ describe('POST /admin/settingsData', () => {
                             done();
                     });
     });
+    // lib/readerhealthconfig.prepare() rewrites every auth.keys entry on each
+    // save. The multi-system fields are not part of its schema, so this guards
+    // against them being silently dropped - which would quietly re-point a
+    // reader at the default system the next time an admin touched the settings
+    // page, with no error anywhere.
+    it('should preserve multi-system fields on API keys', done => {
+        passportStub.login({
+            username: 'adminactive',
+            password: 'changeme',
+            role: 'admin'
+          });
+        const settings = JSON.parse(JSON.stringify(nconf.get()));
+        const savedKeys = settings.auth.keys;
+        // Sending a readerHealth section would put this request on the CSRF
+        // path, which is covered elsewhere; this test is about auth.keys.
+        delete settings.readerHealth;
+        settings.auth.keys = [
+            {
+                "name": "multisystem-reader",
+                "key": "a-key-carrying-multisystem-fields",
+                "system": "Dauphin",
+                "systems": ["Dauphin", "Cumberland"],
+                "allowSourceOverride": true
+            }
+        ];
+        chai.request(server)
+                    .post('/admin/settingsData')
+                    .send(settings)
+                    .end((err, res) => {
+                            should.not.exist(err);
+                            res.status.should.eql(200);
+                            nconf.load();
+                            const key = nconf.get('auth:keys')
+                                .find(k => k.key === 'a-key-carrying-multisystem-fields');
+                            should.exist(key);
+                            key.should.have.property('system').eql('Dauphin');
+                            key.should.have.property('systems').eql(['Dauphin', 'Cumberland']);
+                            key.should.have.property('allowSourceOverride').eql(true);
+                            // Restore, so later tests see the keys they expect.
+                            nconf.set('auth:keys', savedKeys);
+                            nconf.save();
+                            done();
+                    });
+    });
     it('should not save the settings for non-admins', done => {
         passportStub.login({
             username: 'useractive',

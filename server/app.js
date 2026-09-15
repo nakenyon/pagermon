@@ -274,12 +274,10 @@ if (dbtype == 'mysql') {
     if (refreshRequired == 1) {
       console.time('updateMap');
       logger.main.info('CRON: Alias Refresh required, running.')
-      db('messages').update('alias_id', function() {
-        this.select('id')
-            .from('capcodes')
-            .where(db.ref('messages.address'), 'like', db.ref('capcodes.address') )
-            .orderByRaw("REPLACE(address, '_', '%') DESC LIMIT 1")
-      })
+      // Shared with POST /api/capcodeRefresh. This was a second, divergent copy
+      // of the same UPDATE; the system predicate it now carries has to apply
+      // here too, or the cron undoes the scoping the API route enforces.
+      require('./lib/aliasrefresh')()
       .then((result) => {
           console.timeEnd('updateMap');
           nconf.set('database:aliasRefreshRequired', 0);

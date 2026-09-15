@@ -51,7 +51,27 @@ passport.use(
                         if (apikey == key.key) {
                                 // Metadata only: retain the legacy principal and authorization behavior.
                                 req.readerKeyId = key.id;
-                                return done(null, key.name);
+                                // This used to be the bare string key.name, which made
+                                // req.user a string - so every downstream req.user.role
+                                // read was undefined on a String object and evaluated
+                                // false. Multi-system ingest needs the key's system here,
+                                // which a string cannot carry.
+                                //
+                                // role is 'apikey', deliberately NOT 'admin': isAdmin and
+                                // isLoggedIn in middleware/authhelper.js do not inspect
+                                // role on the API-key branch, so an unrecognised value
+                                // leaves every one of those role checks false, exactly as
+                                // the bare string did. Using 'admin' would flip them and
+                                // silently change what an API-key GET /api/messages
+                                // returns under pdwMode + adminShow.
+                                return done(null, {
+                                        apikey: true,
+                                        name: key.name,
+                                        role: 'apikey',
+                                        system: key.system,
+                                        systems: Array.isArray(key.systems) ? key.systems : [],
+                                        allowSourceOverride: !!key.allowSourceOverride
+                                });
                         }
                         return done(null, false);
                 }

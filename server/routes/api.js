@@ -800,7 +800,7 @@ router.route('/capcodes')
       // creating a capcode that no ingest can ever match.
       var systemId;
       try {
-        var systemRow = await systems.resolveForPost(req.user, req.body);
+        var systemRow = await systems.resolveForAdmin(req.user, req.body);
         systemId = systemRow ? systemRow.id : null;
       } catch (err) {
         logger.main.error(err);
@@ -1080,7 +1080,7 @@ router.route('/capcodes/:id')
         var updateAlias = req.body.updateAlias || 0;
         var systemId;
         try {
-          var systemRow = await systems.resolveForPost(req.user, req.body);
+          var systemRow = await systems.resolveForAdmin(req.user, req.body);
           systemId = systemRow ? systemRow.id : null;
         } catch (err) {
           logger.main.error(err);
@@ -1191,7 +1191,7 @@ router.route('/capcodeCheck/:id')
     // exists to support, so an unscoped check would block it as a duplicate.
     var systemId = null;
     try {
-      var systemRow = await systems.resolveForPost(req.user, req.query);
+      var systemRow = await systems.resolveForAdmin(req.user, req.query);
       systemId = systemRow ? systemRow.id : null;
     } catch (err) {
       logger.main.error(err);
@@ -1298,7 +1298,7 @@ router.route('/capcodeImport')
           // A CSV without a `system` column - i.e. one exported before this
           // feature - imports into the system the request resolves to, which
           // for a session admin is the default system.
-          var fallbackSystem = await systems.resolveForPost(req.user, req.body || {});
+          var fallbackSystem = await systems.resolveForAdmin(req.user, req.body || {});
           var fallbackSystemId = fallbackSystem ? fallbackSystem.id : null;
           for await (capcode of data) {
             var address = capcode.address || 0;

@@ -147,6 +147,34 @@ function fallbackForKey(user, body) {
     return defaultSystem();
 }
 
+// Resolves the system for an administrative write - creating or editing an
+// alias, checking an address for duplicates, importing a CSV.
+//
+// Unlike resolveForPost, an explicit system in the request always wins,
+// whoever the caller is. These routes are already behind isAdmin, so the
+// caller is authorised to manage any system; and an API key used as an admin
+// client (which is how scripted capcode management works, since isAdmin
+// accepts an API key) would otherwise have every alias it creates silently
+// forced into the key's own ingest system, or rejected by the unique index if
+// that address already existed there.
+//
+// Falls back to the key's system, then the default, so an omitted system still
+// lands somewhere valid rather than creating an alias that no ingest can match.
+function resolveForAdmin(user, body) {
+    body = body || {};
+    if (body.system_id !== undefined && body.system_id !== null && body.system_id !== '') {
+        return byId(body.system_id).then(function (row) {
+            return row || fallbackForKey(user, {});
+        });
+    }
+    if (body.system) {
+        return byName(body.system).then(function (row) {
+            return row || fallbackForKey(user, {});
+        });
+    }
+    return fallbackForKey(user, {});
+}
+
 // Convenience for callers that only want the id.
 function resolveIdForPost(user, body) {
     return resolveForPost(user, body).then(function (row) {
@@ -173,6 +201,7 @@ module.exports = {
     byName: byName,
     defaultSystem: defaultSystem,
     resolveForPost: resolveForPost,
+    resolveForAdmin: resolveForAdmin,
     resolveIdForPost: resolveIdForPost,
     parseFilter: parseFilter,
     invalidate: invalidate

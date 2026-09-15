@@ -515,6 +515,53 @@ describe('/api/systems', () => {
         });
 });
 
+describe('Capcode admin with an API key', () => {
+        // isAdmin accepts an API key, so capcode management can be scripted.
+        // Those routes must honour an explicit system_id: resolving them the
+        // way ingest does would force every alias into the key's own system,
+        // silently writing to the wrong one - or failing on the unique index
+        // if the address already existed there. Ingest itself must keep
+        // ignoring the body, or a reader could write into any system.
+        it('creates an alias in the system named in the request, not the key\'s', async () => {
+                const res = await chai.request(server)
+                        .post('/api/capcodes')
+                        .set('apikey', KEY_A) // key's own system is 1
+                        .send({ address: '0002000', alias: 'Across the way', agency: 'X', system_id: 2 });
+                res.status.should.eql(200);
+                const row = await db('capcodes').where('address', '0002000').first();
+                row.system_id.should.eql(2);
+        });
+
+        it('allows the same address in a second system', async () => {
+                // Exactly the collision the feature exists for: 0001000 already
+                // exists in both systems from the fixture, so adding it again
+                // to system 2 must fail, but a new address must not.
+                const res = await chai.request(server)
+                        .post('/api/capcodes')
+                        .set('apikey', KEY_A)
+                        .send({ address: '0003000', alias: 'In system two', agency: 'Y', system_id: 2 });
+                res.status.should.eql(200);
+                const res2 = await chai.request(server)
+                        .post('/api/capcodes')
+                        .set('apikey', KEY_B)
+                        .send({ address: '0003000', alias: 'In system one', agency: 'Y', system_id: 1 });
+                res2.status.should.eql(200);
+                const rows = await db('capcodes').where('address', '0003000').orderBy('system_id');
+                rows.length.should.eql(2);
+                rows.map(r => r.system_id).should.eql([1, 2]);
+        });
+
+        it('still refuses to let a reader choose its own system at ingest', async () => {
+                // Same body shape, message route: the key wins, body ignored.
+                const res = await post(KEY_A, {
+                        address: '0001000', message: 'Body says system two', datetime: 1700000200,
+                        source: 'a', system_id: 2, system: 'Second',
+                });
+                const row = await storedMessage(Number(res.text));
+                row.system_id.should.eql(1);
+        });
+});
+
 describe('lib/systems', () => {
         it('parses a comma-separated system filter', () => {
                 should.equal(systems.parseFilter(undefined), null);

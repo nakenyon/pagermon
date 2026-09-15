@@ -1,5 +1,23 @@
 # Unreleased
 
+* **Multi-system support (in progress).** A CAPCODE address is only unique
+  within a paging system, so one PagerMon instance could not serve two networks:
+  the same address resolved to one arbitrary alias regardless of which network
+  the page came from. Aliases and messages are now scoped to a first-class
+  `system`.
+* Database migration adds a `systems` table and a `system_id` on both
+  `capcodes` and `messages`, with `unique(system_id, address)`. Existing installs
+  migrate to a single default system named after `monitorName`, so behaviour is
+  unchanged until a second system is created.
+  * **Upgrade note.** The first start after upgrading runs a one-time backfill
+    over the `messages` table. Do not kill the container while it runs, and
+    raise the healthcheck start period if you use one. Measured at 0.30s for a
+    47,942-message sqlite database; it scales linearly with retained messages.
+  * The sqlite full-text trigger on `messages` is narrowed to
+    `AFTER UPDATE OF message, alias_id`. It previously re-tokenised the message
+    body into the FTS index on *every* column update, including ones that could
+    not affect it. Search results are unchanged; bulk updates are ~4x cheaper.
+
 # 2026.9.14
 
 * Add opt-in **Reader Health** monitoring per API key, with a six-hour default

@@ -147,6 +147,13 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         $scope.page = 'aliases';
         $scope.loading = false;
       });
+      // Drives the system picker in the import dialog.
+      $scope.systems = [];
+      Api.Systems.query().$promise.then(function (results) {
+        $scope.systems = results;
+      }, function () {
+        $scope.systems = [];
+      });
       Api.Settings.get(null, function(results) {
         if (results) {
           if (results.settings.database && results.settings.database.aliasRefreshRequired == 1) {
@@ -225,10 +232,30 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       };
 
       $scope.aliasImport = function () {
-        var modalHtml = '<div class="modal-header"><h5 class="modal-title" id="modal-title">Impot Aliases</h5></div>';
+        var modalHtml = '<div class="modal-header"><h5 class="modal-title" id="modal-title">Import Aliases</h5></div>';
         var messages = `<p>Available Columns: address, alias, agency, color, icon, ignore, pluginconf</p>
                         <p>Required columns are "address" and "alias", all others are optional.</p>`;
-        modalHtml += '<div class="modal-body"><p><input type="file" id="importcsv"/></p><p>CSV file to be imported</p>' + messages + '</div>';
+        // System picker. Only shown when there is more than one system, so a
+        // single-system install sees the dialog exactly as it was.
+        //
+        // Built as plain markup and read back through the DOM rather than
+        // through the scope, matching how the file input beside it already
+        // works: this modal is opened with a string template and its own
+        // controller, so a scope binding here would be a child-scope write.
+        var systemPicker = '';
+        if ($scope.systems && $scope.systems.length > 1) {
+          var options = $scope.systems.map(function (s) {
+            return '<option value="' + s.id + '">' + (s.label || s.name) + '</option>';
+          }).join('');
+          systemPicker =
+            '<p><label for="importsystem">Import into system</label>' +
+            '<select id="importsystem" class="form-control">' + options +
+            '<option value="file">Use the system column in the file</option>' +
+            '</select></p>' +
+            '<p class="text-muted">Every alias in the file is assigned to this system. A ' +
+            '<strong>system</strong> column in the file is ignored unless the last option is chosen.</p>';
+        }
+        modalHtml += '<div class="modal-body"><p><input type="file" id="importcsv"/></p><p>CSV file to be imported</p>' + systemPicker + messages + '</div>';
         modalHtml += '<div class="modal-footer"><button class="btn btn-success" ng-click="confirmImport()">Import</button><button class="btn btn-danger" ng-click="cancelImport()">Cancel</button></div>';
         var modalInstance = $uibModal.open({
           template: modalHtml,
@@ -245,6 +272,10 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       $scope.aliasImportConfirmed = function () {
         $scope.loading = true;
         var filename = document.getElementById("importcsv");
+        // Read alongside the file input, while the modal's DOM is still
+        // present - not inside the FileReader callback, which runs later.
+        var systemPicker = document.getElementById("importsystem");
+        var systemChoice = systemPicker ? systemPicker.value : '';
         if (filename.value.length < 1) {
           // noidea i stole this code.
         } else {
@@ -255,7 +286,8 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             var reader = new FileReader();
             reader.onload = function (e) {
               var rows = e.target.result.split("\n");
-              Api.AliasImport.post(rows).$promise.then(function (response) {
+              var params = systemChoice ? { system: systemChoice } : {};
+              Api.AliasImport.post(params, rows).$promise.then(function (response) {
                 console.log(response)
                 $scope.loading = false;
                 $scope.results = response.results
@@ -266,6 +298,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                        <tr>
                           <th>Address</th>
                           <th>Alias</th>
+                          <th>System</th>
                           <th>Result</th>
                         </tr>
                         </thead>
@@ -273,6 +306,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                         <tr ng-repeat="result in results">
                           <td>{{ result.address }}</td>
                           <td>{{ result.alias }}</td>
+                          <td>{{ result.system }}</td>
                           <td>{{ result.result }}</td>
                         </tr>
                         </tbody>

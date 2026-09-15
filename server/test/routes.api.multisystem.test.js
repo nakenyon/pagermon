@@ -562,6 +562,100 @@ describe('Capcode admin with an API key', () => {
         });
 });
 
+describe('Alias import and export', () => {
+        // The common migration path: an operator upgrades, gets one default
+        // system, adds a second, then imports an alias export taken from
+        // another instance and says which system it belongs to.
+        const csv = 'address,alias,agency,icon,color,ignore\n' +
+                '5550001,Imported One,IMP,fire,red,0\n' +
+                '5550002,Imported Two,IMP,fire,red,0\n';
+
+        function importCsv(query) {
+                return chai.request(server)
+                        .post('/api/capcodeImport' + (query || ''))
+                        .set('apikey', KEY_A)
+                        // The client splits the file on newlines and posts the rows.
+                        .send(csv.split('\n').map(r => r + '\n'));
+        }
+
+        it('imports into the chosen system', async () => {
+                const res = await importCsv('?system=2');
+                res.status.should.eql(200);
+                const rows = await db('capcodes').whereIn('address', ['5550001', '5550002']);
+                rows.length.should.eql(2);
+                rows.every(r => r.system_id === 2).should.eql(true);
+                // The result table tells the operator where they landed.
+                res.body.results.filter(r => r.system === 'Second System').length.should.eql(2);
+        });
+
+        it('falls back to the default system when none is chosen', async () => {
+                // A CSV with no system column and no choice - i.e. exactly what
+                // an install did before this feature existed.
+                const res = await importCsv();
+                res.status.should.eql(200);
+                const rows = await db('capcodes').whereIn('address', ['5550001', '5550002']);
+                rows.every(r => r.system_id === 1).should.eql(true);
+        });
+
+        it('ignores the file\'s own system column unless asked to use it', async () => {
+                // A file exported from another multi-system instance names
+                // systems that may not exist here. The operator's choice has to
+                // win, or rows scatter or silently fall to the default.
+                const withColumn = 'address,alias,agency,system\n' +
+                        '5550003,Elsewhere,IMP,Default\n';
+                const res = await chai.request(server)
+                        .post('/api/capcodeImport?system=2')
+                        .set('apikey', KEY_A)
+                        .send(withColumn.split('\n').map(r => r + '\n'));
+                res.status.should.eql(200);
+                (await db('capcodes').where('address', '5550003').first()).system_id.should.eql(2);
+        });
+
+        it('honours the file\'s system column when asked', async () => {
+                const withColumn = 'address,alias,agency,system\n' +
+                        '5550004,From File,IMP,Second\n';
+                const res = await chai.request(server)
+                        .post('/api/capcodeImport?system=file')
+                        .set('apikey', KEY_A)
+                        .send(withColumn.split('\n').map(r => r + '\n'));
+                res.status.should.eql(200);
+                (await db('capcodes').where('address', '5550004').first()).system_id.should.eql(2);
+        });
+
+        it('updates only the matching system\'s alias on re-import', async () => {
+                // 0001000 exists in both systems with different agencies. An
+                // import into system 2 must not touch system 1's copy.
+                const collide = 'address,alias,agency\n0001000,Reimported,NEW\n';
+                await chai.request(server)
+                        .post('/api/capcodeImport?system=2')
+                        .set('apikey', KEY_A)
+                        .send(collide.split('\n').map(r => r + '\n'));
+                const one = await db('capcodes').where({ address: '0001000', system_id: 1 }).first();
+                const two = await db('capcodes').where({ address: '0001000', system_id: 2 }).first();
+                one.alias.should.eql('West York');
+                two.alias.should.eql('Reimported');
+        });
+
+        it('exports the portable system name and not the local id', async () => {
+                const res = await chai.request(server).post('/api/capcodeExport').set('apikey', KEY_A);
+                res.status.should.eql(200);
+                const header = res.body.data.split('\n')[0];
+                header.should.contain('system');
+                // system_id is specific to the install that produced the file.
+                header.should.not.contain('system_id');
+        });
+
+        it('exports one system when asked', async () => {
+                const res = await chai.request(server)
+                        .post('/api/capcodeExport?system=2').set('apikey', KEY_A);
+                res.status.should.eql(200);
+                const lines = res.body.data.split('\n').filter(l => l.trim());
+                // Header plus system 2's aliases only.
+                lines.slice(1).every(l => l.endsWith('Second')).should.eql(true);
+                lines.length.should.be.above(1);
+        });
+});
+
 describe('lib/systems', () => {
         it('parses a comma-separated system filter', () => {
                 should.equal(systems.parseFilter(undefined), null);

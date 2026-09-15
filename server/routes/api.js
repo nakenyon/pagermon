@@ -1255,12 +1255,19 @@ router.route('/capcodeExport')
     nconf.load();
     var dbtype = nconf.get('database:type');
     var filename = 'export.csv'
+    var systemFilter = systems.parseFilter(req.query.system || (req.body && req.body.system));
     db.from('capcodes')
-      // system name rather than system_id: ids are install-specific, and an
-      // export is meant to be portable to another instance.
-      .select('capcodes.*', 'systems.name as system')
+      // The system NAME, and deliberately not system_id: ids are specific to
+      // the install that produced the file, so carrying one to another
+      // instance would point at a different system or none at all. The name is
+      // the only portable key, and even it is advisory - the importer chooses
+      // the target system.
+      .select('capcodes.id', 'capcodes.address', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon',
+        'capcodes.color', 'capcodes.pluginconf', 'capcodes.ignore', 'systems.name as system')
       .leftJoin('systems', 'systems.id', '=', 'capcodes.system_id')
       .modify(function (queryBuilder) {
+        // Lets an operator hand over one system's aliases rather than the lot.
+        if (systemFilter) queryBuilder.whereIn('capcodes.system_id', systemFilter);
         if (dbtype == 'oracledb')
           queryBuilder.orderByRaw(`REPLACE("address", '_', '%')`);
         else
@@ -1282,7 +1289,19 @@ router.route('/capcodeExport')
   });
 
 router.route('/capcodeImport')
-  .post(authHelper.isAdmin, function (req, res, next) {
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    // Names for the per-row result table, so the operator can see where each
+    // alias actually landed rather than having to trust the dialog.
+    var systemList = [];
+    try {
+      systemList = await systems.all();
+    } catch (err) {
+      logger.main.error(err);
+    }
+    function systemName(id) {
+      var match = systemList.find(function (s) { return Number(s.id) === Number(id); });
+      return match ? (match.label || match.name) : '';
+    }
     for (var key in req.body) {
       //remove newline chars from dataset - yes i realise we are adding them in admin.main.js, it doesn't submit without them.
       req.body[key] = req.body[key].replace(/[\r\n]/g, '');
@@ -1295,10 +1314,32 @@ router.route('/capcodeImport')
         var header = data[0]
         if (('address' in header) && ('alias' in header)) {
           //this checks if the csv has the required headings, should replace this with some form of proper validation
-          // A CSV without a `system` column - i.e. one exported before this
-          // feature - imports into the system the request resolves to, which
-          // for a session admin is the default system.
-          var fallbackSystem = await systems.resolveForAdmin(req.user, req.body || {});
+          // Which system these aliases belong to.
+          //
+          // The importer's choice wins over any `system` column in the file,
+          // and that precedence matters: a CSV exported from another
+          // multi-system instance carries *that* instance's system names, which
+          // may mean nothing here. Honouring the column by default would
+          // scatter rows across systems, or silently drop them into the
+          // default, for a file the operator believed they were directing.
+          //
+          // `system=file` opts into the column instead, for round-tripping an
+          // export back into the instance it came from.
+          //
+          // Absent both, it resolves to the default system - which is the
+          // pre-multi-system behaviour, so an old CSV imports exactly as before.
+          // The picker sends an id; accept a name too, so the endpoint is
+          // usable by hand. 'file' is the opt-in for the column.
+          var requested = String(req.query.system || '').trim();
+          var useFileColumn = requested.toLowerCase() === 'file';
+          var chosenSystem = null;
+          if (requested && !useFileColumn) {
+            chosenSystem = await systems.resolveForAdmin(
+              req.user,
+              /^\d+$/.test(requested) ? { system_id: requested } : { system: requested }
+            );
+          }
+          var fallbackSystem = chosenSystem || await systems.resolveForAdmin(req.user, {});
           var fallbackSystemId = fallbackSystem ? fallbackSystem.id : null;
           for await (capcode of data) {
             var address = capcode.address || 0;
@@ -1308,8 +1349,8 @@ router.route('/capcodeImport')
             var icon = capcode.icon || 'question';
             var ignore = capcode.ignore || 0;
             var pluginconf = JSON.stringify(capcode.pluginconf) || "{}";
-            var namedSystem = capcode.system ? await systems.byName(capcode.system) : null;
-            var systemId = namedSystem ? namedSystem.id : fallbackSystemId;
+            var namedSystem = (useFileColumn && capcode.system) ? await systems.byName(capcode.system) : null;
+            var systemId = chosenSystem ? chosenSystem.id : (namedSystem ? namedSystem.id : fallbackSystemId);
             // Matched on (system_id, address), not address alone: the same
             // address in another system is a different alias, and matching it
             // here would overwrite that system's data.
@@ -1337,6 +1378,7 @@ router.route('/capcodeImport')
                       importresults.push({
                         address: address,
                         alias: alias,
+                        system: systemName(systemId),
                         result: 'updated'
                       })
                     })
@@ -1364,6 +1406,7 @@ router.route('/capcodeImport')
                       importresults.push({
                         address: address,
                         alias: alias,
+                        system: systemName(systemId),
                         result: 'created'
                       })
                     })

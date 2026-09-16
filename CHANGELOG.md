@@ -1,4 +1,4 @@
-# Unreleased
+# 2026.9.15
 
 * **Multi-system support.** A CAPCODE address is only unique within a paging
   system, so one PagerMon instance could not serve two networks: the same

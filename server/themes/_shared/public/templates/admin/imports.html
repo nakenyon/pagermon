@@ -1,0 +1,143 @@
+<!-- Existing-instance import wizard. Kept deliberately close to the older admin
+     templates: rows, hr, tables and the floating #buttons-management actions.
+     Avoid Bootstrap panels here because the dark themes do not restyle them. -->
+<div class="row" style="padding-top: 11px;">
+</div>
+<div ng-if="loading" class="loading"><i class="fa fa-spinner fa-spin"></i></div>
+<div class="alert {{alertMessage.type}} alert-dismissable alert-fixed fade in" ng-if="alertMessage.show">
+  <button type="button" class="close" data-dismiss="alert" aria-label="Close" ng-click="alertMessage.show = false">&times;</button>
+  <strong>{{alertMessage.text}}</strong>
+</div>
+
+<div class="row" style="padding-top: 10px">
+  <div class="col-sm-6 col-xs-12">
+    <h4 style="padding-left: 15px;"><a href="/admin/">Admin</a> / Imports</h4>
+  </div>
+  <div class="col-xs-12">
+    <hr />
+    <p style="padding-left: 15px;" class="text-muted">
+      Import another PagerMon instance's <code>messages.db</code> into a paging
+      system. Copy the source database inside the container first, for example
+      <code>/data/imports/york/messages.db</code>. Apply runs in maintenance mode
+      as a background job.
+    </p>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-5 col-xs-12">
+    <h4>Analyze a source database</h4>
+    <form name="importForm" ng-submit="analyze()">
+      <div class="form-group">
+        <label>Source messages.db path</label>
+        <input class="form-control" ng-model="importRequest.source" required placeholder="/data/imports/york/messages.db">
+      </div>
+      <div class="form-group">
+        <label>Target system name</label>
+        <input class="form-control" ng-model="importRequest.system" required list="knownSystems" placeholder="York">
+        <datalist id="knownSystems">
+          <option ng-repeat="system in systems" value="{{ system.name }}"></option>
+        </datalist>
+      </div>
+      <div class="form-group">
+        <label>Display label</label>
+        <input class="form-control" ng-model="importRequest.label" placeholder="Optional">
+      </div>
+      <div class="form-group">
+        <label>Badge colour</label>
+        <input class="form-control" ng-model="importRequest.color" placeholder="Optional">
+      </div>
+      <div class="form-group">
+        <label>User import</label>
+        <select class="form-control" ng-model="importRequest.users">
+          <option value="all">Analyze and import users</option>
+          <option value="none">Skip users</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit" ng-disabled="loading || importForm.$invalid">Analyze</button>
+    </form>
+
+    <h4 style="margin-top: 25px;">Recent import jobs</h4>
+    <table class="table table-condensed table-hover table-striped valign">
+      <thead class="thead-default">
+        <tr><th>ID</th><th>System</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="job in jobs">
+          <td class="shrink"><span style="font-family: monospace;"><strong>{{ job.id }}</strong></span></td>
+          <td>{{ job.target_system_name }}</td>
+          <td>{{ job.status }}</td>
+          <td class="shrink"><button class="btn btn-xs btn-default" ng-click="selectJob(job)">Open</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col-md-7 col-xs-12" ng-if="selectedJob">
+    <h4>Import #{{ selectedJob.id }} — {{ selectedJob.status }}</h4>
+    <table class="table table-condensed table-striped valign">
+      <tbody>
+        <tr><th>Source</th><td>{{ selectedJob.source_path }}</td></tr>
+        <tr><th>Target system</th><td>{{ selectedJob.plan.targetSystem.name }}</td></tr>
+        <tr><th>Fingerprint</th><td><code>{{ selectedJob.plan.sourceFingerprint }}</code></td></tr>
+      </tbody>
+    </table>
+
+    <table class="table table-condensed table-striped valign">
+      <thead class="thead-default">
+        <tr><th>Capcodes</th><th>Messages</th><th>Users</th><th>Duplicate estimate</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ selectedJob.plan.counts.capcodes }}</td>
+          <td>{{ selectedJob.plan.counts.messages }}</td>
+          <td>{{ selectedJob.plan.counts.users }}</td>
+          <td>{{ selectedJob.plan.counts.skippedDuplicates }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="alert alert-warning" ng-if="selectedJob.plan.warnings.length">
+      <div ng-repeat="warning in selectedJob.plan.warnings">{{ warning }}</div>
+    </div>
+
+    <h4>User review</h4>
+    <p class="text-muted">
+      REVIEW entries must be changed to merge, create or skip before apply. On
+      merge, the existing target account keeps its password, role and status.
+    </p>
+    <table class="table table-condensed table-hover table-striped valign" ng-if="selectedJob.plan.users.length">
+      <thead class="thead-default">
+        <tr><th>Source user</th><th>Email</th><th>Action</th><th>Merge into</th><th>Reason</th></tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="user in selectedJob.plan.users" ng-class="{'warning': user.action === 'REVIEW'}">
+          <td>{{ user.source }}</td>
+          <td>{{ user.sourceEmail }}</td>
+          <td>
+            <select class="form-control input-sm" ng-model="user.action">
+              <option value="merge">merge</option>
+              <option value="create">create</option>
+              <option value="skip">skip</option>
+              <option value="REVIEW">REVIEW</option>
+            </select>
+          </td>
+          <td><input class="form-control input-sm" ng-model="user.into" ng-disabled="user.action !== 'merge'"></td>
+          <td>{{ user.reason || user.matchedOn }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p ng-if="!selectedJob.plan.users.length" class="text-muted">No users will be imported by this plan.</p>
+
+    <h4>Progress / summary</h4>
+    <pre ng-if="selectedJob.progress">{{ selectedJob.progress | json }}</pre>
+    <pre ng-if="selectedJob.summary">{{ selectedJob.summary | json }}</pre>
+    <pre class="text-danger" ng-if="selectedJob.error">{{ selectedJob.error }}</pre>
+  </div>
+</div>
+
+<div class="btn-group-vertical" id="buttons-management" ng-if="selectedJob">
+  <button class="btn btn-default" ng-click="savePlan()" ng-disabled="loading || selectedJob.status === 'running'">Save reviewed plan</button>
+  <button class="btn btn-info" ng-click="dryRun()" ng-disabled="loading || unresolvedUsers(selectedJob.plan).length || selectedJob.status === 'running'">Dry run</button>
+  <button class="btn btn-danger" ng-click="apply()" ng-disabled="loading || unresolvedUsers(selectedJob.plan).length || selectedJob.status === 'running' || selectedJob.status === 'succeeded'">Enter maintenance mode and apply</button>
+</div>

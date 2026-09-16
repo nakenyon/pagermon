@@ -14,6 +14,38 @@ const config = JSON.parse(fs.readFileSync('/data/config.json', 'utf8'));
 if (process.env.PAGERMON_SERVER)     config.hostname   = process.env.PAGERMON_SERVER;
 if (process.env.PAGERMON_API_KEY)    config.apikey     = process.env.PAGERMON_API_KEY;
 if (process.env.PAGERMON_IDENTIFIER) config.identifier = process.env.PAGERMON_IDENTIFIER;
+
+// The simple .env form supports one legacy destination plus numbered extras:
+// PAGERMON_SERVER/PAGERMON_API_KEY, PAGERMON_SERVER_2/PAGERMON_API_KEY_2, etc.
+const numberedServers = Object.keys(process.env)
+    .map(key => key.match(/^PAGERMON_SERVER_(\d+)$/))
+    .filter(Boolean)
+    .map(match => Number(match[1]))
+    .sort((a, b) => a - b);
+if (numberedServers.length) {
+    const destinations = [];
+    // The unnumbered variables remain destination one. If SERVER_1 is present,
+    // use numbered destinations only so a setup cannot accidentally post twice.
+    if (!process.env.PAGERMON_SERVER_1 && config.hostname && config.apikey) {
+        destinations.push({ name: 'server 1', hostname: config.hostname, apikey: config.apikey });
+    }
+    numberedServers.forEach(number => {
+        const hostname = process.env['PAGERMON_SERVER_' + number];
+        const apikey = process.env['PAGERMON_API_KEY_' + number];
+        if (!apikey) {
+            console.error('PAGERMON_SERVER_' + number + ' requires PAGERMON_API_KEY_' + number);
+            process.exit(1);
+        }
+        const destination = { name: 'server ' + number, hostname: hostname, apikey: apikey };
+        if (process.env['PAGERMON_IDENTIFIER_' + number]) destination.identifier = process.env['PAGERMON_IDENTIFIER_' + number];
+        destinations.push(destination);
+    });
+    config.destinations = destinations;
+} else if (process.env.PAGERMON_SERVER || process.env.PAGERMON_API_KEY) {
+    // Explicit legacy env vars should override any destinations persisted in a
+    // reused /data volume, restoring the historical one-server behaviour.
+    config.destinations = [];
+}
 fs.writeFileSync('/data/config.json', JSON.stringify(config, null, 2));
 "
 

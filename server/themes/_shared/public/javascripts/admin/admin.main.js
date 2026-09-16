@@ -48,6 +48,12 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
           'post': { method:'POST', isArray: false },
           'delete': { method: 'DELETE', isArray: false }
         }),
+        Imports: $resource('/api/imports/:id/:action', {id: '@id'}, {
+          'post': { method:'POST', isArray: false },
+          'updatePlan': { method:'POST', params: { action: null }, isArray: false },
+          'dryRun': { method:'POST', params: { action: 'dry-run' }, isArray: false },
+          'apply': { method:'POST', params: { action: 'apply' }, isArray: false }
+        }),
       };
     }])
 
@@ -142,17 +148,62 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
     .controller('AliasController', ['$scope', '$routeParams', 'Api', '$uibModal', '$filter', '$location', '$timeout', 'FileSaver', function ($scope, $routeParams, Api, $uibModal, $filter, $location, $timeout, FileSaver) {
       $scope.loading = true;
       $scope.alertMessage = {};
+      $scope.aliases = [];
+      $scope.systems = [];
+      $scope.filteredAliasGroups = [];
+
+      function rebuildAliasGroups() {
+        var filtered = $filter('filter')($scope.aliases || [], $scope.search);
+        var groups = [];
+        var bySystem = {};
+
+        function ensureGroup(alias) {
+          var key = alias.system_id || 'none';
+          if (!bySystem[key]) {
+            bySystem[key] = {
+              id: key,
+              name: alias.system_label || alias.system_name || 'Unassigned',
+              color: alias.system_color || 'grey',
+              aliases: []
+            };
+            groups.push(bySystem[key]);
+          }
+          return bySystem[key];
+        }
+
+        ($scope.systems || []).forEach(function (system) {
+          bySystem[system.id] = {
+            id: system.id,
+            name: system.label || system.name,
+            color: system.color || 'grey',
+            aliases: []
+          };
+          groups.push(bySystem[system.id]);
+        });
+
+        filtered.forEach(function (alias) {
+          ensureGroup(alias).aliases.push(alias);
+        });
+
+        $scope.filteredAliasGroups = groups.filter(function (group) { return group.aliases.length > 0; });
+      }
+
+      $scope.updateAliasGroups = rebuildAliasGroups;
+      $scope.$watch('search', rebuildAliasGroups);
+
       Api.Aliases.query(null, function(results) {
         $scope.aliases = results;
         $scope.page = 'aliases';
+        rebuildAliasGroups();
         $scope.loading = false;
       });
       // Drives the system picker in the import dialog.
-      $scope.systems = [];
       Api.Systems.query().$promise.then(function (results) {
         $scope.systems = results;
+        rebuildAliasGroups();
       }, function () {
         $scope.systems = [];
+        rebuildAliasGroups();
       });
       Api.Settings.get(null, function(results) {
         if (results) {
@@ -262,32 +313,27 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
           controller: ImportController,
 
         });
-        modalInstance.result.then(function () {
-          $scope.aliasImportConfirmed();
+        modalInstance.result.then(function (payload) {
+          $scope.aliasImportConfirmed(payload);
         }, function () {
           //$log.info('Modal dismissed at: ' + new Date());
         });
       };
 
-      $scope.aliasImportConfirmed = function () {
+      $scope.aliasImportConfirmed = function (payload) {
+        payload = payload || {};
+        if (!payload.rows) {
+          $scope.alertMessage.text = payload.error || 'No CSV file selected';
+          $scope.alertMessage.type = 'alert-danger';
+          $scope.alertMessage.show = true;
+          $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+          return;
+        }
         $scope.loading = true;
-        var filename = document.getElementById("importcsv");
-        // Read alongside the file input, while the modal's DOM is still
-        // present - not inside the FileReader callback, which runs later.
-        var systemPicker = document.getElementById("importsystem");
-        var systemChoice = systemPicker ? systemPicker.value : '';
-        if (filename.value.length < 1) {
-          // noidea i stole this code.
-        } else {
-          var file = filename.files[0];
-          console.log(file)
-          var fileSize = 0;
-          if (filename.files[0]) {
-            var reader = new FileReader();
-            reader.onload = function (e) {
-              var rows = e.target.result.split("\n");
-              var params = systemChoice ? { system: systemChoice } : {};
-              Api.AliasImport.post(params, rows).$promise.then(function (response) {
+        var systemChoice = payload.system || '';
+        var rows = payload.rows;
+        var params = systemChoice ? { system: systemChoice } : {};
+        Api.AliasImport.post(params, rows).$promise.then(function (response) {
                 console.log(response)
                 $scope.loading = false;
                 $scope.results = response.results
@@ -333,11 +379,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                   scope: $scope
                 });
               })
-            }
-            reader.readAsText(filename.files[0]);
-          }
-          return false; //no idea what this does, was also in the code i stole and it doesn't work without it.
-        }
+        return false; //no idea what this does, was also in the code i stole and it doesn't work without it.
       };
 
       $scope.aliasDetail = function (alias_id) {
@@ -427,7 +469,24 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
 
       var ImportController = function ($scope, $uibModalInstance) {
         $scope.confirmImport = function () {
-          $uibModalInstance.close();
+          var filename = document.getElementById("importcsv");
+          var systemPicker = document.getElementById("importsystem");
+          var systemChoice = systemPicker ? systemPicker.value : '';
+          if (!filename || !filename.files || !filename.files.length) {
+            $uibModalInstance.close({ error: 'No CSV file selected', system: systemChoice });
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            $uibModalInstance.close({
+              rows: e.target.result.split("\n"),
+              system: systemChoice
+            });
+          };
+          reader.onerror = function () {
+            $uibModalInstance.close({ error: 'Could not read selected CSV file', system: systemChoice });
+          };
+          reader.readAsText(filename.files[0]);
         };
         $scope.cancelImport = function () {
           $uibModalInstance.dismiss('cancel');
@@ -1444,6 +1503,121 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       };
     }])
 
+    .controller('ImportController', ['$scope', '$interval', '$timeout', 'Api', function ($scope, $interval, $timeout, Api) {
+      $scope.page = 'imports';
+      $scope.loading = false;
+      $scope.alertMessage = {};
+      $scope.jobs = [];
+      $scope.systems = [];
+      $scope.importRequest = { users: 'all' };
+      $scope.selectedJob = null;
+
+      function showMessage(type, text) {
+        $scope.alertMessage.type = type;
+        $scope.alertMessage.text = text;
+        $scope.alertMessage.show = true;
+        $timeout(function () { $scope.alertMessage.show = false; }, 6000);
+      }
+
+      function unresolvedUsers(plan) {
+        if (!plan || !plan.users) return [];
+        return plan.users.filter(function (user) { return user.action === 'REVIEW'; });
+      }
+
+      $scope.unresolvedUsers = unresolvedUsers;
+
+      $scope.loadJobs = function () {
+        Api.Imports.query().$promise.then(function (jobs) {
+          $scope.jobs = jobs;
+          if ($scope.selectedJob) {
+            jobs.forEach(function (job) {
+              if (job.id === $scope.selectedJob.id) $scope.selectedJob = job;
+            });
+          }
+        });
+      };
+
+      Api.Systems.query().$promise.then(function (systems) {
+        $scope.systems = systems;
+      });
+      $scope.loadJobs();
+
+      $scope.analyze = function () {
+        $scope.loading = true;
+        Api.Imports.post(null, {
+          source: $scope.importRequest.source,
+          system: $scope.importRequest.system,
+          label: $scope.importRequest.label,
+          color: $scope.importRequest.color,
+          users: $scope.importRequest.users === 'none' ? 'none' : undefined
+        }).$promise.then(function (job) {
+          $scope.selectedJob = job;
+          $scope.loadJobs();
+          showMessage('alert-success', 'Import analyzed. Review the plan before applying.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Analyze failed');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      $scope.selectJob = function (job) {
+        Api.Imports.get({ id: job.id }).$promise.then(function (fresh) {
+          $scope.selectedJob = fresh;
+        });
+      };
+
+      $scope.savePlan = function () {
+        if (!$scope.selectedJob) return;
+        $scope.loading = true;
+        Api.Imports.updatePlan({ id: $scope.selectedJob.id }, { plan: $scope.selectedJob.plan }).$promise.then(function (job) {
+          $scope.selectedJob = job;
+          $scope.loadJobs();
+          showMessage('alert-success', 'Import plan saved.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Could not save plan');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      $scope.dryRun = function () {
+        if (!$scope.selectedJob) return;
+        $scope.loading = true;
+        Api.Imports.dryRun({ id: $scope.selectedJob.id }, {}).$promise.then(function (response) {
+          $scope.selectedJob.summary = response.summary;
+          showMessage('alert-success', 'Dry run completed and rolled back.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Dry run failed');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      $scope.apply = function () {
+        if (!$scope.selectedJob) return;
+        if (unresolvedUsers($scope.selectedJob.plan).length) {
+          showMessage('alert-danger', 'Resolve all REVIEW users before applying.');
+          return;
+        }
+        $scope.loading = true;
+        Api.Imports.apply({ id: $scope.selectedJob.id }, {}).$promise.then(function (job) {
+          $scope.selectedJob = job;
+          $scope.loadJobs();
+          showMessage('alert-warning', 'Import started. PagerMon is in maintenance mode until it completes.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Apply failed');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      var poll = $interval(function () {
+        if ($scope.selectedJob && $scope.selectedJob.status === 'running') {
+          Api.Imports.get({ id: $scope.selectedJob.id }).$promise.then(function (job) {
+            $scope.selectedJob = job;
+            $scope.loadJobs();
+          });
+        }
+      }, 3000);
+
+      $scope.$on('$destroy', function () {
+        $interval.cancel(poll);
+      });
+    }])
+
     .controller('AdminController', ['$scope', '$routeParams', 'Api', function ($scope, $routeParams, Api) {
       $scope.page = 'admin';
     }])
@@ -1485,6 +1659,10 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         .when('/systems/:id', {
           templateUrl: '/templates/admin/systemDetails.html' + v,
           controller: 'SystemDetailController'
+        })
+        .when('/imports', {
+          templateUrl: '/templates/admin/imports.html' + v,
+          controller: 'ImportController'
         });
       $httpProvider.defaults.headers.delete = { "Content-Type": "application/json;charset=utf-8" };
       $httpProvider.interceptors.push(function($q, $location) {

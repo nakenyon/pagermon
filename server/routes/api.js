@@ -9,6 +9,8 @@ var pluginHandler = require('../plugins/pluginHandler');
 var logger = require('../log');
 var db = require('../knex/knex.js');
 var converter = require('json-2-csv');
+var fs = require('fs');
+var path = require('path');
 
 var nconf = require('nconf');
 
@@ -28,6 +30,8 @@ var passwordpolicy = require('../lib/passwordpolicy')
 // in both, and the system predicate it now carries has to be in both.
 var refreshAliasIds = require('../lib/aliasrefresh')
 var systems = require('../lib/systems')
+var maintenance = require('../lib/maintenance')
+var importer = require('../lib/importer')
 
 // The projection sent to non-admin viewers when HideCapcode is on: everything
 // except `address`, which is the capcode being hidden.
@@ -60,6 +64,22 @@ router.use(function (req, res, next) {
   res.locals.login = req.isAuthenticated();
   res.locals.user = req.user || false;
   next();
+});
+
+// Import apply runs as a maintenance-mode background job. While it is writing a
+// large historical dataset, block other API writes so live ingest or admin edits
+// cannot interleave with the importer transaction. The import endpoints remain
+// available so the Admin UI can poll progress.
+router.use(function (req, res, next) {
+  if (req.method === 'GET' || req.path.indexOf('/imports') === 0) return next();
+  return maintenance.activeImportJob().then(function (job) {
+    if (!job) return next();
+    return res.status(503).json({
+      status: 'maintenance',
+      message: 'PagerMon is in import maintenance mode. Try again when the import completes.',
+      job: job
+    });
+  }).catch(next);
 });
 
 // Per-request pagination state.
@@ -978,6 +998,219 @@ router.route('/systems/:id')
     }
   });
 
+function parseImportJSON(value, fallback) {
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch (err) { return fallback; }
+}
+
+function importJobResponse(row) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    status: row.status,
+    source_path: row.source_path,
+    target_system_name: row.target_system_name,
+    plan: parseImportJSON(row.plan_json, null),
+    progress: parseImportJSON(row.progress_json, {}),
+    summary: parseImportJSON(row.summary_json, null),
+    error: row.error,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    started_at: row.started_at,
+    finished_at: row.finished_at
+  };
+}
+
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function createImportBackup() {
+  if (dbtype !== 'sqlite3') return Promise.resolve(null);
+  var file = nconf.get('database:file');
+  if (!file) return Promise.resolve(null);
+  var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  var backup = file + '.bak-pre-import-' + stamp;
+  return new Promise(function (resolve, reject) {
+    var input = fs.createReadStream(file);
+    var output = fs.createWriteStream(backup, { mode: 0o600 });
+    input.on('error', reject);
+    output.on('error', reject);
+    output.on('close', function () { resolve(backup); });
+    input.pipe(output);
+  });
+}
+
+function runImportJob(jobId) {
+  var row;
+  db('import_jobs').where('id', jobId).first().then(function (found) {
+    row = found;
+    if (!row) throw new Error('Import job not found');
+    var plan = parseImportJSON(row.plan_json, null);
+    if (!plan) throw new Error('Import plan is invalid');
+    return createImportBackup().then(function (backupPath) {
+      if (backupPath) {
+        return db('import_jobs').where('id', jobId).update({
+          progress_json: JSON.stringify({ backup: backupPath }),
+          updated_at: nowISO()
+        });
+      }
+      return null;
+    }).then(function () {
+      return importer.applyPlan(plan, {
+      targetDb: db,
+      progress: function (state) {
+        db('import_jobs').where('id', jobId).update({
+          progress_json: JSON.stringify(state),
+          updated_at: nowISO()
+        }).catch(function (err) { logger.main.error(err); });
+      }
+      });
+    });
+  }).then(function (summary) {
+    systems.invalidate();
+    return db('import_jobs').where('id', jobId).update({
+      status: 'succeeded',
+      summary_json: JSON.stringify(summary),
+      progress_json: JSON.stringify({ complete: true }),
+      updated_at: nowISO(),
+      finished_at: nowISO()
+    });
+  }).catch(function (err) {
+    logger.main.error(err);
+    return db('import_jobs').where('id', jobId).update({
+      status: 'failed',
+      error: err.stack || err.message || String(err),
+      updated_at: nowISO(),
+      finished_at: nowISO()
+    }).catch(function (updateErr) { logger.main.error(updateErr); });
+  });
+}
+
+router.route('/imports')
+  .get(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var rows = await db('import_jobs').orderBy('id', 'desc').limit(25);
+      res.status(200).json(rows.map(importJobResponse));
+    } catch (err) {
+      logger.main.error(err);
+      next(err);
+    }
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var active = await maintenance.activeImportJob();
+      if (active) return res.status(503).json({ message: 'An import is already running', job: active });
+      var source = req.body.source;
+      var systemName = req.body.system;
+      if (!source || !systemName) return res.status(400).json({ message: 'source and system are required' });
+      var plan = await importer.generatePlan({
+        targetDb: db,
+        source: source,
+        system: systemName,
+        label: req.body.label,
+        color: req.body.color,
+        users: req.body.users
+      });
+      var inserted = await db('import_jobs').insert({
+        status: 'analyzed',
+        source_path: source,
+        target_system_name: systemName,
+        plan_json: JSON.stringify(plan),
+        progress_json: JSON.stringify({}),
+        created_at: nowISO(),
+        updated_at: nowISO()
+      }).returning('id');
+      var id = Array.isArray(inserted) ? inserted[0] : inserted;
+      var row = await db('import_jobs').where('id', id).first();
+      res.status(200).json(importJobResponse(row));
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
+    }
+  });
+
+router.route('/imports/:id')
+  .get(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      res.status(200).json(importJobResponse(row));
+    } catch (err) {
+      logger.main.error(err);
+      next(err);
+    }
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      if (row.status === 'running') return res.status(400).json({ message: 'Cannot edit a running import' });
+      var plan = req.body.plan || req.body;
+      if (!plan || !plan.sourceFingerprint) return res.status(400).json({ message: 'A complete import plan is required' });
+      await db('import_jobs').where('id', req.params.id).update({
+        status: 'reviewed',
+        plan_json: JSON.stringify(plan),
+        error: null,
+        updated_at: nowISO()
+      });
+      var updated = await db('import_jobs').where('id', req.params.id).first();
+      res.status(200).json(importJobResponse(updated));
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
+    }
+  });
+
+router.route('/imports/:id/dry-run')
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      var plan = parseImportJSON(row.plan_json, null);
+      var summary = await importer.applyPlan(plan, { targetDb: db, dryRun: true });
+      await db('import_jobs').where('id', req.params.id).update({
+        summary_json: JSON.stringify(summary),
+        updated_at: nowISO(),
+        error: null
+      });
+      res.status(200).json({ status: 'ok', summary: summary });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
+    }
+  });
+
+router.route('/imports/:id/apply')
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var active = await maintenance.activeImportJob();
+      if (active) return res.status(503).json({ message: 'An import is already running', job: active });
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      if (row.status === 'succeeded') return res.status(400).json({ message: 'Import already succeeded' });
+      var plan = parseImportJSON(row.plan_json, null);
+      if ((plan.users || []).some(function (user) { return user.action === 'REVIEW'; })) {
+        return res.status(400).json({ message: 'Resolve all REVIEW users before applying' });
+      }
+      await db('import_jobs').where('id', req.params.id).update({
+        status: 'running',
+        progress_json: JSON.stringify({ started: true }),
+        error: null,
+        summary_json: null,
+        started_at: nowISO(),
+        finished_at: null,
+        updated_at: nowISO()
+      });
+      setImmediate(function () { runImportJob(req.params.id); });
+      var updated = await db('import_jobs').where('id', req.params.id).first();
+      res.status(202).json(importJobResponse(updated));
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
+    }
+  });
+
 router.route('/capcodes/agency')
   .get(authHelper.isAdmin, function (req, res, next) {
     db.from('capcodes')
@@ -1302,12 +1535,14 @@ router.route('/capcodeImport')
       var match = systemList.find(function (s) { return Number(s.id) === Number(id); });
       return match ? (match.label || match.name) : '';
     }
-    for (var key in req.body) {
-      //remove newline chars from dataset - yes i realise we are adding them in admin.main.js, it doesn't submit without them.
-      req.body[key] = req.body[key].replace(/[\r\n]/g, '');
-    }
-    // join data but remove the last newline to prevent the last one being malformed. 
-    var importdata = req.body.join('\n').slice(0, -1);
+    var importRows = Array.isArray(req.body) ? req.body : Object.keys(req.body || {}).map(function (key) { return req.body[key]; });
+    importRows = importRows
+      .map(function (row) { return String(row || '').replace(/[\r\n]/g, ''); })
+      .filter(function (row, index) { return row.length > 0 || index < importRows.length - 1; });
+    // Join rows without blindly trimming the final character: many CSV files do
+    // not end with a newline, and the old slice(0, -1) corrupted the final
+    // field in that common case.
+    var importdata = importRows.join('\n');
     var importresults = [];
     converter.csv2jsonAsync(importdata)
       .then(async (data) => {

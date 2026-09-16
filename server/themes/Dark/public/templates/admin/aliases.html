@@ -13,7 +13,7 @@
           <hr />
       <div class="input-group">
         <span class="input-group-addon"><i class="glyphicon glyphicon-filter"></i></span>
-        <input id="search" type="text" class="form-control" name="search" placeholder="Filter" ng-model="search">
+        <input id="search" type="text" class="form-control" name="search" placeholder="Filter" ng-model="search" ng-change="updateAliasGroups()">
       </div>
     </div>
 </div>
@@ -21,7 +21,11 @@
 <div class="row">
     <div class="col-xs-12">
     <p></p>
-    <div class="">
+    <div class="" ng-repeat="group in filteredAliasGroups">
+      <h4 style="padding-left: 15px; margin-top: 20px;">
+        <span class="label" style="background-color: {{group.color}};">{{group.name}}</span>
+        <small>{{group.aliases.length}} aliases</small>
+      </h4>
       <table class="table table-condensed table-hover table-striped valign">
         <thead class="thead-default">
           <tr>
@@ -30,7 +34,6 @@
             <th style="color: #white; text-align: center;">Address</th>
             <th style="color: #white; text-align: center;">Color</th>
             <th style="color: #white; text-align: center;">Icon</th>
-            <th style="color: #white; text-align: center;">System</th>
             <th style="color: #white; text-align: center;">Agency</th>
             <th style="color: #white; text-align: center;">Filter</th>
             <th style="color: #white; text-align: center;">Alias</th>
@@ -38,7 +41,7 @@
           </tr>
         </thead>
         <tbody>
-        <tr ng-repeat="alias in aliases | filter: search">
+        <tr ng-repeat="alias in group.aliases">
           <!-- TODO: Add links to filters -->
           <td class="shrink" style="vertical-align: middle;"><input ng-model="alias.selected" type="checkbox"/></td>
           <td class="shrink clickable-td" ng-click="aliasDetail(alias.id);" style="color: #d32d27;">
@@ -56,7 +59,6 @@
               </span>
             <span style="vertical-align: middle; ">{{alias.icon}}</span>
           </td>
-          <td class="shrink"><strong>{{alias.system_label || alias.system_name || ''}}</strong></td>
           <td class="shrink"><strong>{{alias.agency || ''}}</strong></td>
           <td class="shrink"><i class="fa fa-circle text-success" ng-if="alias.ignore == 0"></i><i
                   class="fa fa-exclamation-circle text-danger" ng-if="alias.ignore == 1"></i></td>

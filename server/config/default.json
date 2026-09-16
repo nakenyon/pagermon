@@ -44,6 +44,7 @@
     "adminShow": false,
     "HideCapcode": false,
     "HideSource": false,
+    "ShowSource": false,
     "apiSecurity": false
   },
   "mail": {

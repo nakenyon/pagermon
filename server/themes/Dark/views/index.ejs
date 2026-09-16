@@ -98,7 +98,7 @@
             <% if (systems && systems.length > 1) { %>
               <th class="noMobile noSmall" style="text-align: center;">System</th>
             <% } %>
-            <% if (!hidesource || (login && user.role == 'admin')) { %>
+            <% if (showsource) { %>
               <th class="noMobile noSmall" style="text-align: center;">Src</th>
             <% } %>
             <% if (!hidecapcode || (login && user.role == 'admin')) { %>
@@ -121,7 +121,7 @@
                 <span class="small" style="color: white; font-family: monospace;"><strong>{{message.system_name}}</strong></span>
               </td>
             <% } %>
-            <% if (!hidesource || (login && user.role == 'admin')) { %>
+            <% if (showsource) { %>
               <td class="shrink noMobile noSmall clickable-td" uib-popover-template="'templates/popover.html'" popover-append-to-body=true ng-click="popoverEl = 'source'" popover-trigger="'outsideClick'" style="background-color: {{message.color || 'grey'}}; text-align: center;">
                 <span class="small" style="color: white; font-family: monospace;"><strong>{{message.source}}</strong></span>
               </td>
@@ -199,6 +199,7 @@
       login: <%= login ? 'true' : 'false' %>,
       apisecurity: <%= apisecurity ? 'true' : 'false' %>,
       hidecapcode: <%= hidecapcode ? 'true' : 'false' %>,
+      showsource: <%= showsource ? 'true' : 'false' %>,
       pdwmode: <%= pdwmode ? 'true' : 'false' %>,
       timeFormat: "HH:mm"
     };

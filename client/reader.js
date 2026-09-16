@@ -29,21 +29,52 @@ var nconf = require('nconf');
 var hostname = nconf.get('hostname');
 var apikey = nconf.get('apikey');
 var identifier = nconf.get('identifier');
+var configuredDestinations = nconf.get('destinations');
 var sendFunctionCode = nconf.get('sendFunctionCode') || false;
 var useTimestamp = nconf.get('useTimestamp') || true;
 var EASOpts = nconf.get('EAS'); // Import EAS Config Object Ref Pull 435
 
 
-//Check if hostname is in a valid format - currently only removes trailing slash - possibly expand to validate the whole URI? 
-if(hostname.substr(-1) === '/') {
-  var uri = hostname.substr(0, hostname.length - 1)+'/api/messages';
-} else {
-  var uri = hostname+'/api/messages'
+// A destination is intentionally keyed by its own API key: in a consolidated
+// PagerMon instance the key decides the target system. `destinations` is an
+// optional array for fan-out; the legacy hostname/apikey pair remains the
+// single-destination fallback so existing client volumes keep working.
+function destinationUri(value) {
+  var base = String(value || '').replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(base)) throw new Error('hostname must start with http:// or https://');
+  return base + '/api/messages';
 }
+
+function makeDestination(raw, index) {
+  raw = raw || {};
+  var targetHostname = raw.hostname || raw.server;
+  if (!targetHostname || !raw.apikey) throw new Error('destination ' + (index + 1) + ' requires hostname and apikey');
+  return {
+    name: raw.name || targetHostname,
+    uri: destinationUri(targetHostname),
+    apikey: raw.apikey,
+    identifier: raw.identifier || identifier
+  };
+}
+
+var destinations;
+try {
+  if (Array.isArray(configuredDestinations) && configuredDestinations.length) {
+    destinations = configuredDestinations.map(makeDestination);
+  } else {
+    destinations = [makeDestination({ hostname: hostname, apikey: apikey }, 0)];
+  }
+} catch (err) {
+  console.error('Invalid PagerMon destination configuration: ' + err.message);
+  process.exit(1);
+}
+console.log('Configured ' + destinations.length + ' PagerMon destination(s): ' + destinations.map(function (destination) { return destination.name; }).join(', '));
 
 var http = require('http');
 var request = require('request');
-require('request').debug = true;
+// request debug logs request headers, including API keys. Never enable it for
+// a reader that carries production credentials.
+require('request').debug = false;
 var rp = require('request-promise-native');
 var moment = require('moment');
 
@@ -170,7 +201,9 @@ rl.on('line', (line) => {
       datetime: datetime,
       source: identifier
     };
-    sendPage(form, 0);
+    destinations.forEach(function (destination) {
+      sendPage(destination, form, 0);
+    });
   } else {
     console.log(colors.red(time+': ')+colors.grey(line));
   }
@@ -178,30 +211,34 @@ rl.on('line', (line) => {
   console.log('Input died!');
 });
 
-var sendPage = function(message,retries) {
+var sendPage = function(destination, message, retries) {
+  // Do not mutate the decoded form shared by destinations: a destination may
+  // use a reader-specific identifier while the same decoded page is sent to
+  // another target with the default identifier.
+  var form = Object.assign({}, message, { source: destination.identifier });
   var options = {
     method: 'POST',
-    uri: uri,
+    uri: destination.uri,
     headers: {
       'X-Requested-With': 'XMLHttpRequest',
       'User-Agent': 'PagerMon reader.js',
-      apikey: apikey
+      apikey: destination.apikey
     },
-    form: message
+    form: form
   };
   rp(options)
   .then(function (body) {
-    // console.log(colors.success('Message delivered. ID: '+body)); 
+    // console.log(colors.success('Delivered to ' + destination.name + '. ID: ' + body));
   })
   .catch(function (err) {
-    console.log(colors.yellow('Message failed to deliver. '+err));
+    // Do not log options or headers here: they include the API key.
+    console.log(colors.yellow('Message failed to deliver to ' + destination.name + ': ' + err.message));
     if (retries < 10) {
       var retryTime = Math.pow(2, retries) * 1000;
-      retries++;
-      console.log(colors.yellow(`Retrying in ${retryTime} ms`));
-      setTimeout(sendPage, retryTime, message, retries);
+      console.log(colors.yellow('Retrying ' + destination.name + ' in ' + retryTime + ' ms'));
+      setTimeout(sendPage, retryTime, destination, message, retries + 1);
     } else {
-      console.log(colors.yellow('Message failed to deliver after 10 retries, giving up'));
+      console.log(colors.yellow('Message failed to deliver to ' + destination.name + ' after 10 retries, giving up'));
     }
   });
 };

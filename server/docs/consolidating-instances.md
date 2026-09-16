@@ -44,9 +44,24 @@ On merge, the existing target account wins: its password, role and status remain
 unchanged. The source password hash is discarded and roles are never escalated.
 A newly created user retains the source password hash.
 
-Tell affected users before cutover: users merged from multiple old instances may
-need to use forgot-password, because only the password from the target account
-survives.
+### Password communication for users
+
+The importer does **not** reset passwords or send email. Tell users this before
+cutover:
+
+- If an account is newly created by the first import, the password from that
+  original instance becomes its active password on the consolidated instance.
+- If the same person is merged from a later import, their password from that
+  later/original instance is discarded. The active password remains the one on
+  the target account — normally the password from the first instance imported
+  for that person.
+- A user who does not know that active password must use the normal
+  forgot-password process after cutover, provided the target has password reset
+  and SMTP configured.
+
+This is deliberate: silently replacing an existing password hash would be
+surprising, difficult to audit, and could overwrite the credentials the person
+is already using on the target.
 
 ## Before the rehearsal
 
@@ -199,7 +214,25 @@ The importer's message duplicate rule handles historic/import overlap.
 4. Confirm the new instance receives messages from every reader.
 5. Disable MessageRepeat on the old instances.
 6. Stop old containers; do not delete their data directories yet.
-7. Retain old data directories as archives for an agreed retention period.
+7. Retain old data directories as operator-managed archives for an agreed
+   retention period.
+
+## Old-instance archives
+
+PagerMon does **not** archive, export or delete old instances automatically.
+That is an operational decision because the old directories contain real message
+history, user data and configuration secrets.
+
+Recommended initial policy:
+
+1. Stop old containers after cutover and set `restart: "no"` (or otherwise
+   ensure they cannot come back accidentally).
+2. Remove old hostnames from the reverse proxy/DNS once the transition is
+   accepted.
+3. Keep the old data directories as read-only/operator-managed archives for an
+   initial period such as 90 days.
+4. At the end of that period, decide whether to retain an encrypted backup or
+   delete the old directories according to local retention and security policy.
 
 ## CLI fallback
 

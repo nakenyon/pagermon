@@ -11,6 +11,7 @@ const healthConfig = require('../lib/readerhealthconfig');
 const readerHealth = require('../lib/readerhealth');
 const db = require('../knex/knex');
 const csrf = require('../middleware/csrf');
+const maintenance = require('../lib/maintenance');
 router.use(csrf.issue);
 
 function healthCsrf(req, res, next) {
@@ -69,6 +70,8 @@ router.route('/settingsData')
         res.json(data);
     })
     .post(authHelper.isAdmin, healthCsrf, async function (req, res, next) {
+        const activeImport = await maintenance.activeImportJob();
+        if (activeImport) return res.status(503).json({ error: 'PagerMon is in import maintenance mode. Try again when the import completes.', job: activeImport });
         nconf.load();
         const previous = JSON.parse(JSON.stringify(nconf.get()));
         const h = healthConfig.health(previous);

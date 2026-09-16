@@ -9,6 +9,8 @@ var pluginHandler = require('../plugins/pluginHandler');
 var logger = require('../log');
 var db = require('../knex/knex.js');
 var converter = require('json-2-csv');
+var fs = require('fs');
+var path = require('path');
 
 var nconf = require('nconf');
 
@@ -24,39 +26,38 @@ router.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 const passport = require('../auth/local');
 var authHelper = require('../middleware/authhelper')
 var passwordpolicy = require('../lib/passwordpolicy')
+// Shared with the mysql alias-refresh cron in app.js. It used to be duplicated
+// in both, and the system predicate it now carries has to be in both.
+var refreshAliasIds = require('../lib/aliasrefresh')
+var systems = require('../lib/systems')
+var maintenance = require('../lib/maintenance')
+var importer = require('../lib/importer')
 
-// Recomputes messages.alias_id from the capcodes table: for each message, the
-// most specific capcode whose address pattern the message's address matches.
-// REPLACE(address,'_','%') DESC is what makes "most specific" work - it sorts
-// literal digits above the '_' wildcard.
+// The projection sent to non-admin viewers when HideCapcode is on: everything
+// except `address`, which is the capcode being hidden.
 //
-// Measured against a copy of a real 47,827-row messages.db before changing this:
-// the single whole-table UPDATE takes ~2.7s. Splitting it into one statement per
-// distinct address (450 of them) produced byte-identical alias_id values but took
-// ~5.2s, and held the write lock for the whole run - so the original shape stays.
-// sqlite keeps the 67-row capcodes table in page cache and the per-row subquery
-// is cheap; the statement overhead of the alternative is not.
-//
-// `address` limits the update to one address; omit it to refresh everything.
-function refreshAliasIds(address) {
-  var dbtype = nconf.get('database:type');
-  return db('messages')
-    .update('alias_id', function () {
-      this.select('id')
-        .from('capcodes')
-        .where(db.ref('messages.address'), 'like', db.ref('capcodes.address'))
-        .modify(function (queryBuilder) {
-          if (dbtype == 'oracledb')
-            queryBuilder.orderByRaw(`REPLACE("address", '_', '%') DESC`);
-          else
-            queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`);
-        })
-        .limit(1);
-    })
-    .modify(function (queryBuilder) {
-      if (typeof address !== 'undefined')
-        queryBuilder.where(db.ref('messages.address'), '=', address);
-    });
+// This existed as five hand-maintained copies of the same object literal - two
+// on read paths and three in the socket emit block - which is how a field added
+// to one ends up missing from another. The system fields are carried here
+// because clients filter and badge on them; they are not sensitive, and a row
+// without them cannot be matched against the viewer's system selection.
+function withoutCapcode(row) {
+  return {
+    "id": row.id,
+    "message": row.message,
+    "source": row.source,
+    "timestamp": row.timestamp,
+    "alias_id": row.alias_id,
+    "alias": row.alias,
+    "agency": row.agency,
+    "icon": row.icon,
+    "color": row.color,
+    "ignore": row.ignore,
+    "system_id": row.system_id,
+    "system_name": row.system_name,
+    "system_label": row.system_label,
+    "system_color": row.system_color
+  };
 }
 
 router.use(function (req, res, next) {
@@ -65,14 +66,39 @@ router.use(function (req, res, next) {
   next();
 });
 
-// defaults
-var initData = {};
-initData.limit = nconf.get('messages:defaultLimit');
-initData.replaceText = nconf.get('messages:replaceText');
-initData.currentPage = 0;
-initData.pageCount = 0;
-initData.msgCount = 0;
-initData.offset = 0;
+// Import apply runs as a maintenance-mode background job. While it is writing a
+// large historical dataset, block other API writes so live ingest or admin edits
+// cannot interleave with the importer transaction. The import endpoints remain
+// available so the Admin UI can poll progress.
+router.use(function (req, res, next) {
+  if (req.method === 'GET' || req.path.indexOf('/imports') === 0) return next();
+  return maintenance.activeImportJob().then(function (job) {
+    if (!job) return next();
+    return res.status(503).json({
+      status: 'maintenance',
+      message: 'PagerMon is in import maintenance mode. Try again when the import completes.',
+      job: job
+    });
+  }).catch(next);
+});
+
+// Per-request pagination state.
+//
+// This was a single module-level object mutated in place by both list handlers,
+// so two overlapping requests read and wrote each other's currentPage, limit and
+// offset - a page of results could be computed with another request's offset.
+// Adding a system filter makes that more likely, not less, because a filtered
+// and an unfiltered request differ in msgCount. Each request now gets its own.
+function newInitData() {
+  return {
+    limit: nconf.get('messages:defaultLimit'),
+    replaceText: nconf.get('messages:replaceText'),
+    currentPage: 0,
+    pageCount: 0,
+    msgCount: 0,
+    offset: 0
+  };
+}
 
 // auth variables
 var HideCapcode = nconf.get('messages:HideCapcode');
@@ -92,8 +118,10 @@ router.route('/messages')
     var maxLimit = nconf.get('messages:maxLimit');
     var defaultLimit = nconf.get('messages:defaultLimit');
     var HideCapcode = nconf.get('messages:HideCapcode');
+    var initData = newInitData();
+    // null means "no filter", not "match nothing" - see lib/systems.parseFilter.
+    var systemFilter = systems.parseFilter(req.query.system);
 
-    initData.replaceText = nconf.get('messages:replaceText');
     if (typeof req.query.page !== 'undefined') {
       var page = parseInt(req.query.page, 10);
       if (page > 0) {
@@ -126,7 +154,13 @@ router.route('/messages')
       } else {
         this.from('messages').where('alias_id', 'not in', subquery).orWhereNull('alias_id')
       }
-    }).count('* as msgcount')
+    })
+      // The same filter must be applied to the count and to the page below, or
+      // pageCount describes a different result set than the one returned.
+      .modify(function (queryBuilder) {
+        if (systemFilter) queryBuilder.whereIn('messages.system_id', systemFilter);
+      })
+      .count('* as msgcount')
       .then(function (initcount) {
         var count = initcount[0]
         if (count) {
@@ -147,17 +181,28 @@ router.route('/messages')
           var rowCount
 
           db.from('messages')
-            .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'))
+            .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'),
+              'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
             .modify(function (queryBuilder) {
+              // The ignore test is grouped. Left ungrouped it emitted
+              //   capcodes.ignore = 0 OR capcodes.ignore IS NULL AND <filter>
+              // and AND binds tighter than OR, so the system filter applied
+              // only to messages with no alias - every matched message came
+              // back whatever system it belonged to, while the count query
+              // (which is grouped) correctly reported the filtered total.
               if (pdwMode) {
                 if (adminShow && req.isAuthenticated() && req.user.role == 'admin') {
-                  queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where('capcodes.ignore', 0).orWhereNull('capcodes.ignore')
+                  queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                    .where(function () { this.where('capcodes.ignore', 0).orWhereNull('capcodes.ignore') })
                 } else {
                   queryBuilder.innerJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where('capcodes.ignore', 0)
                 }
               } else {
-                queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id').where('capcodes.ignore', 0).orWhereNull('capcodes.ignore')
+                queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                  .where(function () { this.where('capcodes.ignore', 0).orWhereNull('capcodes.ignore') })
               }
+              queryBuilder.leftJoin('systems', 'systems.id', '=', 'messages.system_id')
+              if (systemFilter) queryBuilder.whereIn('messages.system_id', systemFilter);
             })
             .orderBy('messages.timestamp', 'desc')
             .limit(initData.limit)
@@ -168,18 +213,7 @@ router.route('/messages')
                 //outRow = JSON.parse(newrow);
                 if (HideCapcode) {
                   if (!req.isAuthenticated() || (req.isAuthenticated() && req.user.role == 'user')) {
-                    row = {
-                      "id": row.id,
-                      "message": row.message,
-                      "source": row.source,
-                      "timestamp": row.timestamp,
-                      "alias_id": row.alias_id,
-                      "alias": row.alias,
-                      "agency": row.agency,
-                      "icon": row.icon,
-                      "color": row.color,
-                      "ignore": row.ignore
-                    };
+                    row = withoutCapcode(row);
                   }
                 }
                 if (row) {
@@ -226,12 +260,38 @@ router.route('/messages')
       var data = req.body;
       data.pluginData = {};
 
+      // Which paging system this message belongs to. The API key is the
+      // authority; see lib/systems.js for the full resolution order and why a
+      // key with no system configured must still succeed.
+      var systemRow = null;
+      try {
+        systemRow = await systems.resolveForPost(req.user, data);
+      } catch (err) {
+        logger.main.error('Could not resolve system for incoming message: ' + err);
+        return res.status(500).json({ message: 'Error - could not resolve paging system' });
+      }
+      if (!systemRow) {
+        // Only reachable if the systems table is empty, i.e. the migration did
+        // not complete. Storing the message with a null system_id would make it
+        // invisible to every filtered view, so refuse it instead: the reader
+        // will retry and the operator gets a loud error.
+        logger.main.error('No paging systems are defined - refusing message. Check that database migrations completed.');
+        return res.status(500).json({ message: 'Error - no paging systems defined' });
+      }
+      var systemId = systemRow.id;
+      // Plugins can route per-system, in the same way the per-alias pluginconf
+      // mechanism lets them route per-alias.
+      data.pluginData.system = { id: systemRow.id, name: systemRow.name, label: systemRow.label };
+
       if (filterDupes) {
         // this is a bad solution and tech debt that will bite us in the ass if we ever go HA, but that's a problem for future me and that guy's a dick
         var datetime = data.datetime || 1;
         var timeDiff = datetime - dupeTime;
         // if duplicate filtering is enabled, we want to populate the message buffer and check for duplicates within the limits
-        var matches = _.where(msgBuffer, { message: data.message, address: data.address });
+        // Scoped by system: two networks sending an identical message in the
+        // same window are two real pages, not a duplicate, and without this
+        // they cross-suppress each other.
+        var matches = _.where(msgBuffer, { message: data.message, address: data.address, system_id: systemId });
         if (matches.length > 0) {
           if (dupeTime != 0) {
             // search the matching messages and see if any match the time constrain
@@ -254,7 +314,7 @@ router.route('/messages')
         if (msgBuffer.length > dupeArrayLimit) {
           msgBuffer.shift();
         }
-        msgBuffer.push({ message: data.message, datetime: data.datetime, address: data.address });
+        msgBuffer.push({ message: data.message, datetime: data.datetime, address: data.address, system_id: systemId });
       }
 
       // send data to pluginHandler before proceeding
@@ -293,6 +353,7 @@ router.route('/messages')
               })
                 .andWhere('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             } else if ((dupeLimit != 0) && (dupeTime == 0)) {
               queryBuilder.where('id', 'in', function () {
                 this.select('*')
@@ -307,6 +368,7 @@ router.route('/messages')
               })
                 .andWhere('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             } else if ((dupeLimit == 0) && (dupeTime != 0)) {
               queryBuilder.where('id', 'in', function () {
                 this.select('id')
@@ -315,9 +377,11 @@ router.route('/messages')
               })
                 .andWhere('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             } else {
               queryBuilder.where('message', '=', message)
                 .andWhere('address', '=', address)
+                .andWhere('system_id', '=', systemId)
             }
           })
           .then((row) => {
@@ -327,6 +391,10 @@ router.route('/messages')
             } else {
               db.from('capcodes')
                 .select('id', 'ignore')
+                // Scoped to the posting system: the same address means
+                // different agencies on different networks, so an unscoped
+                // match resolves to an arbitrary one of them.
+                .where('system_id', '=', systemId)
                 // TODO: test this doesn't break other DBs - there's a lot of quote changes here
                 .modify(function (queryBuilder) {
                   if (dbtype == 'oracledb') {
@@ -337,6 +405,9 @@ router.route('/messages')
                     queryBuilder.orderByRaw(`REPLACE(address, '_', '%') DESC`)
                   }
                 })
+                // Only the most specific match is used; fetching the rest and
+                // discarding them was pure waste.
+                .limit(1)
                 .then((row) => {
                   var insert;
                   var alias_id = null;
@@ -359,7 +430,7 @@ router.route('/messages')
                   }
 
                   if (insert == true) {
-                    var insertmsg = { address: address, message: message, timestamp: datetime, source: source, alias_id: alias_id }
+                    var insertmsg = { address: address, message: message, timestamp: datetime, source: source, alias_id: alias_id, system_id: systemId }
                     db('messages').insert(insertmsg).returning('id')
                       .then((result) => {
                         // emit the full message
@@ -384,9 +455,13 @@ router.route('/messages')
                         }
 
                         db.from('messages')
-                          .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', 'capcodes.pluginconf')
+                          .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', 'capcodes.pluginconf',
+                            'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
                           .modify(function (queryBuilder) {
                             queryBuilder.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+                            // So the socket payload carries the system and
+                            // clients can filter and badge without a lookup.
+                            queryBuilder.leftJoin('systems', 'systems.id', '=', 'messages.system_id')
                           })
                           .where('messages.id', '=', msgId)
                           .then((row) => {
@@ -414,53 +489,20 @@ router.route('/messages')
                                       req.io.of('adminio').emit('messagePost', row);
                                       if (row.alias_id != null) {
                                         // send to normal user as well if not null alias_id
-                                        rowuser = {
-                                          "id": row.id,
-                                          "message": row.message,
-                                          "source": row.source,
-                                          "timestamp": row.timestamp,
-                                          "alias_id": row.alias_id,
-                                          "alias": row.alias,
-                                          "agency": row.agency,
-                                          "icon": row.icon,
-                                          "color": row.color,
-                                          "ignore": row.ignore
-                                        };
+                                        rowuser = withoutCapcode(row);
                                         req.io.emit('messagePost', rowuser);
                                       }
                                     } else {
                                       // if AdminShow not on only send if not null alias_id
                                       if (row.alias_id != null) {
                                         req.io.of('adminio').emit('messagePost', row);
-                                        rowuser = {
-                                          "id": row.id,
-                                          "message": row.message,
-                                          "source": row.source,
-                                          "timestamp": row.timestamp,
-                                          "alias_id": row.alias_id,
-                                          "alias": row.alias,
-                                          "agency": row.agency,
-                                          "icon": row.icon,
-                                          "color": row.color,
-                                          "ignore": row.ignore
-                                        };
+                                        rowuser = withoutCapcode(row);
                                         req.io.emit('messagePost', rowuser);
                                       }
                                     }
                                   } else {
                                     req.io.of('adminio').emit('messagePost', row);
-                                    rowuser = {
-                                      "id": row.id,
-                                      "message": row.message,
-                                      "source": row.source,
-                                      "timestamp": row.timestamp,
-                                      "alias_id": row.alias_id,
-                                      "alias": row.alias,
-                                      "agency": row.agency,
-                                      "icon": row.icon,
-                                      "color": row.color,
-                                      "ignore": row.ignore
-                                    };
+                                    rowuser = withoutCapcode(row);
                                     req.io.emit('messagePost', rowuser);
                                   }
                                 } else {
@@ -527,24 +569,15 @@ router.route('/messages/:id')
     var id = req.params.id;
 
     db.from('messages')
-      .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'))
+      .select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'),
+        'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
       .leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id')
+      .leftJoin('systems', 'systems.id', '=', 'messages.system_id')
       .where('messages.id', id)
       .then((row) => {
         if (HideCapcode) {
           if (!req.isAuthenticated() || (req.isAuthenticated() && req.user.role == 'user')) {
-            row = {
-              "id": row[0].id,
-              "message": row[0].message,
-              "source": row[0].source,
-              "timestamp": row[0].timestamp,
-              "alias_id": row[0].alias_id,
-              "alias": row[0].alias,
-              "agency": row[0].agency,
-              "icon": row[0].icon,
-              "color": row[0].color,
-              "ignore": row[0].ignore
-            };
+            row = withoutCapcode(row[0]);
           }
         }
         if (row.ignore == 1) {
@@ -573,7 +606,8 @@ router.route('/messageSearch')
     var HideCapcode = nconf.get('messages:HideCapcode');
     var apiSecurity = nconf.get('messages:apiSecurity');
     var defaultLimit = nconf.get('messages:defaultLimit');
-    initData.replaceText = nconf.get('messages:replaceText');
+    var initData = newInitData();
+    var systemFilter = systems.parseFilter(req.query.system);
 
     if (typeof req.query.page !== 'undefined') {
       var page = parseInt(req.query.page, 10);
@@ -612,7 +646,8 @@ router.route('/messageSearch')
 
     var data = []
     console.time('sql')
-    db.select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'))
+    db.select('messages.*', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon', 'capcodes.color', 'capcodes.ignore', db.raw('CASE WHEN NOT capcodes.address = messages.address THEN 1 ELSE 0 END as wildcard'),
+      'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
       .modify(function (qb) {
         if (dbtype == 'sqlite3' && query != '') {
           qb.from('messages_search_index')
@@ -629,6 +664,7 @@ router.route('/messageSearch')
         } else {
           qb.leftJoin('capcodes', 'capcodes.id', '=', 'messages.alias_id');
         }
+        qb.leftJoin('systems', 'systems.id', '=', 'messages.system_id');
         if (dbtype == 'sqlite3' && query != '') {
           qb.whereRaw('messages_search_index MATCH ?', query)
         } else if (dbtype == 'mysql' && query != '') {
@@ -638,8 +674,15 @@ router.route('/messageSearch')
         } else if (dbtype == 'oracledb' && query != '') {
           qb.whereRaw(`CONTAINS("messages"."message", ?, 1) > 0`, query)
         } else {
+          // Grouped. Without the parentheses this emitted
+          //   address LIKE ? OR source = ? AND alias_id IN (...)
+          // and AND binds tighter than OR, so combining an address with an
+          // agency returned every message matching the address regardless of
+          // agency, plus the ones the caller actually asked for.
           if (address != '')
-            qb.where('messages.address', 'LIKE', address).orWhere('messages.source', address);
+            qb.where(function (qb2) {
+              qb2.where('messages.address', 'LIKE', address).orWhere('messages.source', address);
+            });
           if (agency != '')
             qb.whereIn('messages.alias_id', function (qb2) {
               qb2.select('id').from('capcodes').where('agency', agency).where('ignore', 0);
@@ -647,24 +690,18 @@ router.route('/messageSearch')
           if (alias != '')
             qb.where('messages.alias_id',alias);
         }
+        // Outside the branches above, so it applies to the full-text search and
+        // the structured search alike. On sqlite the FTS branch already joins
+        // messages, so this filters correctly after MATCH narrows the set -
+        // no change to the virtual table is needed.
+        if (systemFilter) qb.whereIn('messages.system_id', systemFilter);
       }).orderBy('messages.timestamp', 'desc')
       .then((rows) => {
         if (rows) {
           for (row of rows) {
             if (HideCapcode) {
               if (!req.isAuthenticated() || (req.isAuthenticated() && req.user.role == 'user')) {
-                row = {
-                  "id": row.id,
-                  "message": row.message,
-                  "source": row.source,
-                  "timestamp": row.timestamp,
-                  "alias_id": row.alias_id,
-                  "alias": row.alias,
-                  "agency": row.agency,
-                  "icon": row.icon,
-                  "color": row.color,
-                  "ignore": row.ignore
-                };
+                row = withoutCapcode(row);
               }
             }
             if (pdwMode) {
@@ -747,9 +784,12 @@ router.route('/capcodes')
   .get(authHelper.isAdmin, function (req, res, next) {
     nconf.load();
     var dbtype = nconf.get('database:type');
+    var systemFilter = systems.parseFilter(req.query.system);
     db.from('capcodes')
-      .select('*')
+      .select('capcodes.*', 'systems.name as system_name', 'systems.label as system_label', 'systems.color as system_color')
+      .leftJoin('systems', 'systems.id', '=', 'capcodes.system_id')
       .modify(function (queryBuilder) {
+        if (systemFilter) queryBuilder.whereIn('capcodes.system_id', systemFilter);
         if (dbtype == 'oracledb')
           queryBuilder.orderByRaw(`REPLACE("address", '_', '%')`);
         else
@@ -763,7 +803,7 @@ router.route('/capcodes')
         return next(err);
       })
   })
-  .post(authHelper.isAdmin, function (req, res, next) {
+  .post(authHelper.isAdmin, async function (req, res, next) {
     nconf.load();
     var updateRequired = nconf.get('database:aliasRefreshRequired');
     if (req.body.address && req.body.alias) {
@@ -775,31 +815,35 @@ router.route('/capcodes')
       var icon = req.body.icon || 'question';
       var ignore = req.body.ignore || 0;
       var pluginconf = JSON.stringify(req.body.pluginconf) || "{}";
+      // An alias belongs to exactly one system. Resolved through the shared
+      // helper so an omitted system_id lands in the default system rather than
+      // creating a capcode that no ingest can ever match.
+      var systemId;
+      try {
+        var systemRow = await systems.resolveForAdmin(req.user, req.body);
+        systemId = systemRow ? systemRow.id : null;
+      } catch (err) {
+        logger.main.error(err);
+        return res.status(500).send(err);
+      }
+      var record = {
+        id: id,
+        address: address,
+        alias: alias,
+        agency: agency,
+        color: color,
+        icon: icon,
+        ignore: ignore,
+        pluginconf: pluginconf,
+        system_id: systemId
+      };
       db.from('capcodes')
         .where('id', '=', id)
         .modify(function (queryBuilder) {
           if (id == null) {
-            queryBuilder.insert({
-              id: id,
-              address: address,
-              alias: alias,
-              agency: agency,
-              color: color,
-              icon: icon,
-              ignore: ignore,
-              pluginconf: pluginconf
-            })
+            queryBuilder.insert(record)
           } else {
-            queryBuilder.update({
-              id: id,
-              address: address,
-              alias: alias,
-              agency: agency,
-              color: color,
-              icon: icon,
-              ignore: ignore,
-              pluginconf: pluginconf
-            })
+            queryBuilder.update(record)
           }
         })
         .returning('id')
@@ -817,6 +861,353 @@ router.route('/capcodes')
       logger.main.debug(util.format('%o', req.body || 'no request body'));
     } else {
       res.status(500).json({ message: 'Error - address or alias missing' });
+    }
+  });
+
+// Paging systems.
+//
+// The list is guarded with isLoggedInMessages, not isAdmin: it drives the
+// system selector on the message list, which every viewer sees, and under
+// apiSecurity=false that includes anonymous ones. /api/capcodes/agency is
+// admin-only yet the front end calls it from the message view, which is a bug
+// worth not repeating.
+router.route('/systems')
+  .get(authHelper.isLoggedInMessages, function (req, res, next) {
+    systems.enabled()
+      .then((rows) => {
+        res.status(200).json(rows);
+      })
+      .catch((err) => {
+        logger.main.error(err);
+        return next(err);
+      })
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    var name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ message: 'Error - name is required' });
+    try {
+      var existing = await db('systems').where('name', name).first();
+      if (existing) return res.status(400).json({ message: 'Error - a system with that name already exists' });
+      var record = {
+        name: name.substring(0, 64),
+        label: (req.body.label || name).substring(0, 255),
+        color: req.body.color || null,
+        enabled: req.body.enabled == 0 ? 0 : 1,
+        sortorder: parseInt(req.body.sortorder, 10) || 0,
+        is_default: 0
+      };
+      var result = await db('systems').insert(record).returning('id');
+      var id = Array.isArray(result) ? result[0] : result;
+      // Exactly one row is the default; setting one clears the rest.
+      if (req.body.is_default == 1) {
+        await db('systems').update('is_default', 0);
+        await db('systems').where('id', id).update('is_default', 1);
+      }
+      systems.invalidate();
+      res.status(200).json({ status: 'ok', id: id });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(500).send(err);
+    }
+  });
+
+router.route('/systems/:id')
+  .get(authHelper.isAdmin, function (req, res, next) {
+    if (req.params.id == 'new') {
+      return res.status(200).json({ id: '', name: '', label: '', color: 'grey', enabled: 1, is_default: 0, sortorder: 0 });
+    }
+    db('systems').where('id', req.params.id).first()
+      .then((row) => {
+        res.status(200).json(row || {});
+      })
+      .catch((err) => {
+        logger.main.error(err);
+        return next(err);
+      })
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    var id = req.params.id;
+    try {
+      if (id == 'new') {
+        var name = (req.body.name || '').trim();
+        if (!name) return res.status(400).json({ message: 'Error - name is required' });
+        var clash = await db('systems').where('name', name).first();
+        if (clash) return res.status(400).json({ message: 'Error - a system with that name already exists' });
+        var inserted = await db('systems').insert({
+          name: name.substring(0, 64),
+          label: (req.body.label || name).substring(0, 255),
+          color: req.body.color || null,
+          enabled: req.body.enabled == 0 ? 0 : 1,
+          sortorder: parseInt(req.body.sortorder, 10) || 0,
+          is_default: 0
+        }).returning('id');
+        id = Array.isArray(inserted) ? inserted[0] : inserted;
+      } else {
+        var current = await db('systems').where('id', id).first();
+        if (!current) return res.status(404).json({ message: 'Error - no such system' });
+        var newName = (req.body.name || current.name).trim();
+        var nameClash = await db('systems').where('name', newName).whereNot('id', id).first();
+        if (nameClash) return res.status(400).json({ message: 'Error - a system with that name already exists' });
+        await db('systems').where('id', id).update({
+          name: newName.substring(0, 64),
+          label: (req.body.label || newName).substring(0, 255),
+          color: req.body.color || null,
+          enabled: req.body.enabled == 0 ? 0 : 1,
+          sortorder: parseInt(req.body.sortorder, 10) || 0
+        });
+      }
+      if (req.body.is_default == 1) {
+        await db('systems').update('is_default', 0);
+        await db('systems').where('id', id).update('is_default', 1);
+      }
+      systems.invalidate();
+      res.status(200).json({ status: 'ok', id: id });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(500).send(err);
+    }
+  })
+  .delete(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('systems').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Error - no such system' });
+      // These guards are the only referential integrity there is: knex 0.16
+      // ignores .references() when altering a sqlite table, and sqlite does not
+      // enforce foreign keys without the pragma. Deleting a referenced system
+      // would leave capcodes and messages pointing at nothing, invisible to
+      // every filtered view.
+      if (row.is_default == 1) {
+        return res.status(400).json({ message: 'Error - the default system cannot be deleted' });
+      }
+      var capcodeCount = await db('capcodes').where('system_id', req.params.id).count('id as count').first();
+      var messageCount = await db('messages').where('system_id', req.params.id).count('id as count').first();
+      var capcodes = Number(capcodeCount.count || 0);
+      var messages = Number(messageCount.count || 0);
+      if (capcodes > 0 || messages > 0) {
+        return res.status(400).json({
+          message: 'Error - system still has ' + capcodes + ' alias(es) and ' + messages +
+            ' message(s). Reassign or delete them first.'
+        });
+      }
+      await db('systems').where('id', req.params.id).del();
+      systems.invalidate();
+      res.status(200).json({ status: 'ok' });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(500).send(err);
+    }
+  });
+
+function parseImportJSON(value, fallback) {
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch (err) { return fallback; }
+}
+
+function importJobResponse(row) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    status: row.status,
+    source_path: row.source_path,
+    target_system_name: row.target_system_name,
+    plan: parseImportJSON(row.plan_json, null),
+    progress: parseImportJSON(row.progress_json, {}),
+    summary: parseImportJSON(row.summary_json, null),
+    error: row.error,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    started_at: row.started_at,
+    finished_at: row.finished_at
+  };
+}
+
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function createImportBackup() {
+  if (dbtype !== 'sqlite3') return Promise.resolve(null);
+  var file = nconf.get('database:file');
+  if (!file) return Promise.resolve(null);
+  var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  var backup = file + '.bak-pre-import-' + stamp;
+  return new Promise(function (resolve, reject) {
+    var input = fs.createReadStream(file);
+    var output = fs.createWriteStream(backup, { mode: 0o600 });
+    input.on('error', reject);
+    output.on('error', reject);
+    output.on('close', function () { resolve(backup); });
+    input.pipe(output);
+  });
+}
+
+function runImportJob(jobId) {
+  var row;
+  db('import_jobs').where('id', jobId).first().then(function (found) {
+    row = found;
+    if (!row) throw new Error('Import job not found');
+    var plan = parseImportJSON(row.plan_json, null);
+    if (!plan) throw new Error('Import plan is invalid');
+    return createImportBackup().then(function (backupPath) {
+      if (backupPath) {
+        return db('import_jobs').where('id', jobId).update({
+          progress_json: JSON.stringify({ backup: backupPath }),
+          updated_at: nowISO()
+        });
+      }
+      return null;
+    }).then(function () {
+      return importer.applyPlan(plan, {
+      targetDb: db,
+      progress: function (state) {
+        db('import_jobs').where('id', jobId).update({
+          progress_json: JSON.stringify(state),
+          updated_at: nowISO()
+        }).catch(function (err) { logger.main.error(err); });
+      }
+      });
+    });
+  }).then(function (summary) {
+    systems.invalidate();
+    return db('import_jobs').where('id', jobId).update({
+      status: 'succeeded',
+      summary_json: JSON.stringify(summary),
+      progress_json: JSON.stringify({ complete: true }),
+      updated_at: nowISO(),
+      finished_at: nowISO()
+    });
+  }).catch(function (err) {
+    logger.main.error(err);
+    return db('import_jobs').where('id', jobId).update({
+      status: 'failed',
+      error: err.stack || err.message || String(err),
+      updated_at: nowISO(),
+      finished_at: nowISO()
+    }).catch(function (updateErr) { logger.main.error(updateErr); });
+  });
+}
+
+router.route('/imports')
+  .get(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var rows = await db('import_jobs').orderBy('id', 'desc').limit(25);
+      res.status(200).json(rows.map(importJobResponse));
+    } catch (err) {
+      logger.main.error(err);
+      next(err);
+    }
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var active = await maintenance.activeImportJob();
+      if (active) return res.status(503).json({ message: 'An import is already running', job: active });
+      var source = req.body.source;
+      var systemName = req.body.system;
+      if (!source || !systemName) return res.status(400).json({ message: 'source and system are required' });
+      var plan = await importer.generatePlan({
+        targetDb: db,
+        source: source,
+        system: systemName,
+        label: req.body.label,
+        color: req.body.color,
+        users: req.body.users
+      });
+      var inserted = await db('import_jobs').insert({
+        status: 'analyzed',
+        source_path: source,
+        target_system_name: systemName,
+        plan_json: JSON.stringify(plan),
+        progress_json: JSON.stringify({}),
+        created_at: nowISO(),
+        updated_at: nowISO()
+      }).returning('id');
+      var id = Array.isArray(inserted) ? inserted[0] : inserted;
+      var row = await db('import_jobs').where('id', id).first();
+      res.status(200).json(importJobResponse(row));
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
+    }
+  });
+
+router.route('/imports/:id')
+  .get(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      res.status(200).json(importJobResponse(row));
+    } catch (err) {
+      logger.main.error(err);
+      next(err);
+    }
+  })
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      if (row.status === 'running') return res.status(400).json({ message: 'Cannot edit a running import' });
+      var plan = req.body.plan || req.body;
+      if (!plan || !plan.sourceFingerprint) return res.status(400).json({ message: 'A complete import plan is required' });
+      await db('import_jobs').where('id', req.params.id).update({
+        status: 'reviewed',
+        plan_json: JSON.stringify(plan),
+        error: null,
+        updated_at: nowISO()
+      });
+      var updated = await db('import_jobs').where('id', req.params.id).first();
+      res.status(200).json(importJobResponse(updated));
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
+    }
+  });
+
+router.route('/imports/:id/dry-run')
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      var plan = parseImportJSON(row.plan_json, null);
+      var summary = await importer.applyPlan(plan, { targetDb: db, dryRun: true });
+      await db('import_jobs').where('id', req.params.id).update({
+        summary_json: JSON.stringify(summary),
+        updated_at: nowISO(),
+        error: null
+      });
+      res.status(200).json({ status: 'ok', summary: summary });
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
+    }
+  });
+
+router.route('/imports/:id/apply')
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    try {
+      var active = await maintenance.activeImportJob();
+      if (active) return res.status(503).json({ message: 'An import is already running', job: active });
+      var row = await db('import_jobs').where('id', req.params.id).first();
+      if (!row) return res.status(404).json({ message: 'Import job not found' });
+      if (row.status === 'succeeded') return res.status(400).json({ message: 'Import already succeeded' });
+      var plan = parseImportJSON(row.plan_json, null);
+      if ((plan.users || []).some(function (user) { return user.action === 'REVIEW'; })) {
+        return res.status(400).json({ message: 'Resolve all REVIEW users before applying' });
+      }
+      await db('import_jobs').where('id', req.params.id).update({
+        status: 'running',
+        progress_json: JSON.stringify({ started: true }),
+        error: null,
+        summary_json: null,
+        started_at: nowISO(),
+        finished_at: null,
+        updated_at: nowISO()
+      });
+      setImmediate(function () { runImportJob(req.params.id); });
+      var updated = await db('import_jobs').where('id', req.params.id).first();
+      res.status(202).json(importJobResponse(updated));
+    } catch (err) {
+      logger.main.error(err);
+      res.status(400).json({ message: err.message || String(err) });
     }
   });
 
@@ -858,7 +1249,8 @@ router.route('/capcodes/:id')
       "icon": "question",
       "color": "black",
       "ignore": 0,
-      "pluginconf": {}
+      "pluginconf": {},
+      "system_id": null
     };
     if (id == 'new') {
       res.status(200).json(defaults);
@@ -881,7 +1273,7 @@ router.route('/capcodes/:id')
         })
     }
   })
-  .post(authHelper.isAdmin, function (req, res, next) {
+  .post(authHelper.isAdmin, async function (req, res, next) {
     var dbtype = nconf.get('database:type');
     var id = req.params.id || req.body.id || null;
     nconf.load();
@@ -919,6 +1311,25 @@ router.route('/capcodes/:id')
         var ignore = req.body.ignore || 0;
         var pluginconf = JSON.stringify(req.body.pluginconf) || "{}";
         var updateAlias = req.body.updateAlias || 0;
+        var systemId;
+        try {
+          var systemRow = await systems.resolveForAdmin(req.user, req.body);
+          systemId = systemRow ? systemRow.id : null;
+        } catch (err) {
+          logger.main.error(err);
+          return res.status(500).send(err);
+        }
+        var record = {
+          id: id,
+          address: address,
+          alias: alias,
+          agency: agency,
+          color: color,
+          icon: icon,
+          ignore: ignore,
+          pluginconf: pluginconf,
+          system_id: systemId
+        };
 
         console.time('insert');
         db.from('capcodes')
@@ -926,27 +1337,9 @@ router.route('/capcodes/:id')
           .where('id', '=', id)
           .modify(function (queryBuilder) {
             if (id == null) {
-              queryBuilder.insert({
-                id: id,
-                address: address,
-                alias: alias,
-                agency: agency,
-                color: color,
-                icon: icon,
-                ignore: ignore,
-                pluginconf: pluginconf
-              })
+              queryBuilder.insert(record)
             } else {
-              queryBuilder.update({
-                id: id,
-                address: address,
-                alias: alias,
-                agency: agency,
-                color: color,
-                icon: icon,
-                ignore: ignore,
-                pluginconf: pluginconf
-              })
+              queryBuilder.update(record)
             }
           })
           .then((result) => {
@@ -970,7 +1363,10 @@ router.route('/capcodes/:id')
               if (specificRefresh && /^\d+$/.test(req.body.address)) {
                 //Refresh this specific Alias
                 console.time('updateMap');
-                refreshAliasIds(req.body.address)
+                // Scoped to the edited capcode's own system: only that system's
+                // messages can be affected by the edit, and bounding the update
+                // keeps one system's admin activity off another's rows.
+                refreshAliasIds({ address: req.body.address, systemId: systemId })
                 .catch((err) => {
                   logger.main.error(err);
                 })
@@ -1021,11 +1417,25 @@ router.route('/capcodes/:id')
   });
 
 router.route('/capcodeCheck/:id')
-  .get(authHelper.isAdmin, function (req, res, next) {
+  .get(authHelper.isAdmin, async function (req, res, next) {
     var id = req.params.id;
+    // "Does this address already exist" is only meaningful within a system:
+    // the same address in two systems is the legitimate case this feature
+    // exists to support, so an unscoped check would block it as a duplicate.
+    var systemId = null;
+    try {
+      var systemRow = await systems.resolveForAdmin(req.user, req.query);
+      systemId = systemRow ? systemRow.id : null;
+    } catch (err) {
+      logger.main.error(err);
+      return next(err);
+    }
     db.from('capcodes')
       .select('*')
       .where('address', id)
+      .modify(function (queryBuilder) {
+        if (systemId !== null) queryBuilder.where('system_id', systemId);
+      })
       .then((row) => {
         if (row.length > 0) {
           row = row[0]
@@ -1040,7 +1450,8 @@ router.route('/capcodeCheck/:id')
             "icon": "question",
             "color": "black",
             "ignore": 0,
-            "pluginconf": {}
+            "pluginconf": {},
+            "system_id": systemId
           };
           res.status(200).json(row);
         }
@@ -1077,9 +1488,19 @@ router.route('/capcodeExport')
     nconf.load();
     var dbtype = nconf.get('database:type');
     var filename = 'export.csv'
+    var systemFilter = systems.parseFilter(req.query.system || (req.body && req.body.system));
     db.from('capcodes')
-      .select('*')
+      // The system NAME, and deliberately not system_id: ids are specific to
+      // the install that produced the file, so carrying one to another
+      // instance would point at a different system or none at all. The name is
+      // the only portable key, and even it is advisory - the importer chooses
+      // the target system.
+      .select('capcodes.id', 'capcodes.address', 'capcodes.alias', 'capcodes.agency', 'capcodes.icon',
+        'capcodes.color', 'capcodes.pluginconf', 'capcodes.ignore', 'systems.name as system')
+      .leftJoin('systems', 'systems.id', '=', 'capcodes.system_id')
       .modify(function (queryBuilder) {
+        // Lets an operator hand over one system's aliases rather than the lot.
+        if (systemFilter) queryBuilder.whereIn('capcodes.system_id', systemFilter);
         if (dbtype == 'oracledb')
           queryBuilder.orderByRaw(`REPLACE("address", '_', '%')`);
         else
@@ -1101,19 +1522,60 @@ router.route('/capcodeExport')
   });
 
 router.route('/capcodeImport')
-  .post(authHelper.isAdmin, function (req, res, next) {
-    for (var key in req.body) {
-      //remove newline chars from dataset - yes i realise we are adding them in admin.main.js, it doesn't submit without them.
-      req.body[key] = req.body[key].replace(/[\r\n]/g, '');
+  .post(authHelper.isAdmin, async function (req, res, next) {
+    // Names for the per-row result table, so the operator can see where each
+    // alias actually landed rather than having to trust the dialog.
+    var systemList = [];
+    try {
+      systemList = await systems.all();
+    } catch (err) {
+      logger.main.error(err);
     }
-    // join data but remove the last newline to prevent the last one being malformed. 
-    var importdata = req.body.join('\n').slice(0, -1);
+    function systemName(id) {
+      var match = systemList.find(function (s) { return Number(s.id) === Number(id); });
+      return match ? (match.label || match.name) : '';
+    }
+    var importRows = Array.isArray(req.body) ? req.body : Object.keys(req.body || {}).map(function (key) { return req.body[key]; });
+    importRows = importRows
+      .map(function (row) { return String(row || '').replace(/[\r\n]/g, ''); })
+      .filter(function (row, index) { return row.length > 0 || index < importRows.length - 1; });
+    // Join rows without blindly trimming the final character: many CSV files do
+    // not end with a newline, and the old slice(0, -1) corrupted the final
+    // field in that common case.
+    var importdata = importRows.join('\n');
     var importresults = [];
     converter.csv2jsonAsync(importdata)
       .then(async (data) => {
         var header = data[0]
         if (('address' in header) && ('alias' in header)) {
           //this checks if the csv has the required headings, should replace this with some form of proper validation
+          // Which system these aliases belong to.
+          //
+          // The importer's choice wins over any `system` column in the file,
+          // and that precedence matters: a CSV exported from another
+          // multi-system instance carries *that* instance's system names, which
+          // may mean nothing here. Honouring the column by default would
+          // scatter rows across systems, or silently drop them into the
+          // default, for a file the operator believed they were directing.
+          //
+          // `system=file` opts into the column instead, for round-tripping an
+          // export back into the instance it came from.
+          //
+          // Absent both, it resolves to the default system - which is the
+          // pre-multi-system behaviour, so an old CSV imports exactly as before.
+          // The picker sends an id; accept a name too, so the endpoint is
+          // usable by hand. 'file' is the opt-in for the column.
+          var requested = String(req.query.system || '').trim();
+          var useFileColumn = requested.toLowerCase() === 'file';
+          var chosenSystem = null;
+          if (requested && !useFileColumn) {
+            chosenSystem = await systems.resolveForAdmin(
+              req.user,
+              /^\d+$/.test(requested) ? { system_id: requested } : { system: requested }
+            );
+          }
+          var fallbackSystem = chosenSystem || await systems.resolveForAdmin(req.user, {});
+          var fallbackSystemId = fallbackSystem ? fallbackSystem.id : null;
           for await (capcode of data) {
             var address = capcode.address || 0;
             var alias = capcode.alias || 'null';
@@ -1122,9 +1584,15 @@ router.route('/capcodeImport')
             var icon = capcode.icon || 'question';
             var ignore = capcode.ignore || 0;
             var pluginconf = JSON.stringify(capcode.pluginconf) || "{}";
+            var namedSystem = (useFileColumn && capcode.system) ? await systems.byName(capcode.system) : null;
+            var systemId = chosenSystem ? chosenSystem.id : (namedSystem ? namedSystem.id : fallbackSystemId);
+            // Matched on (system_id, address), not address alone: the same
+            // address in another system is a different alias, and matching it
+            // here would overwrite that system's data.
             await db('capcodes')
               .returning('id')
               .where('address', '=', address)
+              .where('system_id', '=', systemId)
               .first()
               .then((rows) => {
                 if (rows) {
@@ -1138,12 +1606,14 @@ router.route('/capcodeImport')
                       color: color,
                       icon: icon,
                       ignore: ignore,
-                      pluginconf: pluginconf
+                      pluginconf: pluginconf,
+                      system_id: systemId
                     })
                     .then((result) => {
                       importresults.push({
                         address: address,
                         alias: alias,
+                        system: systemName(systemId),
                         result: 'updated'
                       })
                     })
@@ -1164,12 +1634,14 @@ router.route('/capcodeImport')
                     color: color,
                     icon: icon,
                     ignore: ignore,
-                    pluginconf: pluginconf
+                    pluginconf: pluginconf,
+                    system_id: systemId
                   })
                     .then((result) => {
                       importresults.push({
                         address: address,
                         alias: alias,
+                        system: systemName(systemId),
                         result: 'created'
                       })
                     })

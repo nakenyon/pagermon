@@ -1,4 +1,66 @@
-# Unreleased
+# 2026.9.15
+
+* **Multi-system support.** A CAPCODE address is only unique within a paging
+  system, so one PagerMon instance could not serve two networks: the same
+  address resolved to one arbitrary alias regardless of which network the page
+  came from. Aliases and messages are now scoped to a first-class `system`.
+  See the [upgrade guide](server/docs/multi-system-upgrade.md) before deploying.
+* **Client multi-server delivery.** A reader can fan decoded pages directly to
+  several PagerMon servers using the familiar `PAGERMON_SERVER`/
+  `PAGERMON_API_KEY` pair plus numbered `PAGERMON_SERVER_2`/
+  `PAGERMON_API_KEY_2` variables. Each target has its own API key and retries
+  independently. This supports a reversible consolidation proof of concept
+  without MessageRepeat.
+* **Existing-instance consolidation.** Admin → Imports analyzes an old
+  `messages.db`, presents user merges for review, supports transactional dry
+  runs, and applies an import as a maintenance-mode background job. Capcodes,
+  message history and users can move together; sessions, reset tokens,
+  reader-health state and configuration are deliberately not imported. See
+  [the consolidation runbook](server/docs/consolidating-instances.md).
+  * **Breaking change.** Consolidating instances retires the old per-instance
+    hostnames. Update reader configuration, bookmarks, integrations and reverse
+    proxy entries before stopping the old instances.
+  * A merged user keeps the existing target account's password, role and status;
+    tell users that password reset may be needed after cutover.
+  * The target SQLite database receives a `messages.db.bak-pre-import-*` backup
+    before an Admin UI apply. Rehearse every source using Dry run first.
+* The API key decides which system a message belongs to. A key may optionally be
+  allowed to choose among named systems using the reader's `source` field. A key
+  with no system configured - which is every key immediately after upgrading -
+  posts into the default system, so ingest keeps working untouched.
+* Viewers get a system selector on the message list and a system badge per row,
+  both shown only once a second system exists. The choice is a display
+  preference stored in a cookie, not a permission: every viewer can see every
+  system. Live updates are filtered to match.
+* Admins get a Systems page, a System field on each alias, and a System
+  selection per API key under Settings. A system cannot be deleted while aliases
+  or messages still belong to it, and the default system cannot be deleted.
+* Fixed: editing one system's alias could re-point another system's messages,
+  because the alias refresh matched capcodes across the whole table.
+* Fixed: message search combined an address with an agency using an
+  unparenthesised `OR`, so it returned every message matching the address
+  whatever its agency.
+* Fixed: the message list applied its system filter only to messages with no
+  alias, while reporting the correctly filtered total - so the rows and the
+  pagination disagreed.
+* Fixed: pagination state was shared between concurrent requests, so two
+  overlapping requests could corrupt each other's page and offset.
+* Fixed: live updates ignored the alias filter, so an alias-filtered view
+  received every message on the system.
+* The message-list front end moves to `themes/_shared`, where it is one file
+  rather than four inline copies that had already begun to drift.
+* Database migration adds a `systems` table and a `system_id` on both
+  `capcodes` and `messages`, with `unique(system_id, address)`. Existing installs
+  migrate to a single default system named after `monitorName`, so behaviour is
+  unchanged until a second system is created.
+  * **Upgrade note.** The first start after upgrading runs a one-time backfill
+    over the `messages` table. Do not kill the container while it runs, and
+    raise the healthcheck start period if you use one. Measured at 0.30s for a
+    47,942-message sqlite database; it scales linearly with retained messages.
+  * The sqlite full-text trigger on `messages` is narrowed to
+    `AFTER UPDATE OF message, alias_id`. It previously re-tokenised the message
+    body into the FTS index on *every* column update, including ones that could
+    not affect it. Search results are unchanged; bulk updates are ~4x cheaper.
 
 # 2026.9.14
 

@@ -325,12 +325,12 @@
               </div>
             </div>
             <div class="form-group">
-              <label for="messages.HideSource" class="col-xs-4 col-sm-3 control-label">Hide Source</label>
+              <label for="messages.ShowSource" class="col-xs-4 col-sm-3 control-label">Show Source</label>
               <div class="col-xs-8 col-sm-9">
               <div class="checkbox">
                 <label>
-                <input type="checkbox" name="messages.HideSource" ng-model="settings.messages.HideSource">
-                Hide Source field for non-logged in users. Note: Does not secure source data at the API level, only hides it.
+                <input type="checkbox" name="messages.ShowSource" ng-model="settings.messages.ShowSource">
+                Show the reader/source column on the message list. Source data remains available to admins/API clients; this only controls the table column.
                 </label>
               </div>
               </div>
@@ -590,7 +590,8 @@
                 <thead>
                   <tr>
                     <th width="1%"></th>
-                    <th width="25%">Name</th>
+                    <th width="20%">Name</th>
+                    <th width="20%">System</th>
                     <th width="99%">Key</th>
                     <th width="1%"></th>
                   </tr>
@@ -601,6 +602,12 @@
                       <input type="checkbox" ng-model="key.selected"/></td>
                     <td>
                       <input type="text" class="form-control" placeholder="Name" ng-model="key.name" required></td>
+                    <td>
+                      <select class="form-control" ng-model="key.system"
+                              ng-options="s.name as (s.label || s.name) for s in systems"
+                              title="The paging system messages from this key belong to">
+                        <option value="">(default system)</option>
+                      </select></td>
                     <td colspan="{{key.key ? '2' : '1'}}">
                       <input type="text" class="form-control" placeholder="Key" ng-model="key.key" readonly required></td>
                     <td ng-if="key.key == ''">
@@ -611,6 +618,7 @@
                     <td style="text-align: left;">
                       <input ng-disabled="!keySelected()" type="button" class="btn btn-sm btn-danger" ng-click="removeKey()" value="&times;">
                     </td>
+                    <td></td>
                     <td></td>
                     <td></td>
                     <td>

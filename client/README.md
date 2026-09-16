@@ -41,6 +41,64 @@ working example.
 | `PAGERMON_API_KEY`     | `config.apikey`     | -         |
 | `PAGERMON_IDENTIFIER`  | `config.identifier` | -         |
 
+### Send decoded pages to several servers
+
+The client can fan each decoded page out directly to multiple PagerMon servers.
+This is useful during a consolidation proof-of-concept: each reader can post to
+its existing instance and the new consolidated instance without enabling
+MessageRepeat on the old server.
+
+Add a `destinations` array to the client `/data/config.json`:
+
+```json
+{
+  "identifier": "DAUPHIN RTL",
+  "destinations": [
+    {
+      "name": "existing Dauphin",
+      "hostname": "https://dauphin.example.net",
+      "apikey": "old-instance-reader-key"
+    },
+    {
+      "name": "consolidated Dauphin",
+      "hostname": "https://paging.example.net",
+      "apikey": "new-instance-key-assigned-to-Dauphin"
+    }
+  ]
+}
+```
+
+Each destination is posted independently and retried independently (up to ten
+exponential-backoff retries). A failure reaching one server does not prevent
+posting to another. The destination API key determines the receiving system on a
+multi-system server.
+
+`identifier` is shared by default. A destination may override it when needed:
+
+```json
+{ "name": "secondary", "hostname": "https://secondary.example.net", "apikey": "key", "identifier": "SECONDARY RTL" }
+```
+
+For Docker Compose or a `.env` file, the familiar connection-variable syntax
+also supports numbered additional servers. The unnumbered variables are server
+one; add `_2`, `_3`, and so on for additional targets:
+
+```dotenv
+PAGERMON_SERVER=https://old.example.net
+PAGERMON_API_KEY=old-key
+PAGERMON_SERVER_2=https://new.example.net
+PAGERMON_API_KEY_2=new-key-assigned-to-Dauphin
+```
+
+`PAGERMON_IDENTIFIER_2` optionally overrides the shared identifier for one
+numbered destination. Numbering may start at `_1` instead; when
+`PAGERMON_SERVER_1` is used, supply matching numbered credentials for every
+destination and do not also use the unnumbered pair.
+
+Numbered server variables override a non-empty `destinations` array already
+stored in the client config. The legacy single
+`PAGERMON_SERVER`/`PAGERMON_API_KEY` pair continues to work exactly as before.
+
 **Timezone**
 
 | Variable | Meaning | Default |

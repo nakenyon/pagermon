@@ -77,6 +77,10 @@ attribution is legally required. It is given because it should be.
 * [Reader inactivity alerts](server/docs/reader-health.md) — per-API-key silence
   detection (six hours by default), with outage and recovery notifications via
   email, Pushover, Telegram or Discord; administrator-configured and opt-in
+* [Multi-system support](server/docs/multi-system-upgrade.md) — assign aliases
+  and messages to separate paging systems in one instance; see
+  [consolidating existing instances](server/docs/consolidating-instances.md) for
+  the reviewed import and cutover process
 * Optional message rotation — delete messages older than a configurable
   retention window (off by default; enable under admin settings)
 * Native POCSAG / FLEX / EAS Client Support

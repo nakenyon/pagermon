@@ -41,6 +41,106 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         UseremailCheck: $resource('/api/userCheck/email/:id', {id: '@id'}, {
           'post': { method:'POST', isArray: false }
         }),
+        Systems: $resource('/api/systems', null, {
+          'post': { method:'POST', isArray: false }
+        }),
+        SystemDetail: $resource('/api/systems/:id', {id: '@id'}, {
+          'post': { method:'POST', isArray: false },
+          'delete': { method: 'DELETE', isArray: false }
+        }),
+        Imports: $resource('/api/imports/:id/:action', {id: '@id'}, {
+          'post': { method:'POST', isArray: false },
+          'updatePlan': { method:'POST', params: { action: null }, isArray: false },
+          'dryRun': { method:'POST', params: { action: 'dry-run' }, isArray: false },
+          'apply': { method:'POST', params: { action: 'apply' }, isArray: false }
+        }),
+      };
+    }])
+
+    // Paging systems. Modelled on UserController/UserDetailController, which is
+    // the smallest complete CRUD example in this file.
+    .controller('SystemController', ['$scope', '$routeParams', 'Api', '$uibModal', '$filter', '$location', '$timeout', function ($scope, $routeParams, Api, $uibModal, $filter, $location, $timeout) {
+      $scope.loading = true;
+      $scope.alertMessage = {};
+      $scope.page = 'systems';
+
+      $scope.loadSystems = function () {
+        Api.Systems.query(null, function (results) {
+          $scope.systems = results;
+          $scope.loading = false;
+        });
+      };
+      $scope.loadSystems();
+
+      $scope.systemDetail = function (id) {
+        $location.url('/systems/' + id);
+      };
+
+      $scope.systemDelete = function (system) {
+        var modalHtml = '<div class="modal-header"><h5 class="modal-title" id="modal-title">Delete System</h5></div>';
+        var message = '<p>Are you sure you want to delete <strong>' + (system.label || system.name) + '</strong>?</p>' +
+          '<p>A system can only be deleted once no aliases or messages belong to it.</p>';
+        modalHtml += '<div class="modal-body">' + message + '</div>';
+        modalHtml += '<div class="modal-footer"><button class="btn btn-danger" ng-click="confirmDelete()">OK</button><button class="btn btn-primary" ng-click="cancelDelete()">Cancel</button></div>';
+
+        var modalInstance = $uibModal.open({
+          template: modalHtml,
+          controller: ConfirmController
+        });
+
+        modalInstance.result.then(function () {
+          $scope.loading = true;
+          Api.SystemDetail.delete({ id: system.id }).$promise.then(function () {
+            $scope.alertMessage.text = 'System deleted';
+            $scope.alertMessage.type = 'alert-success';
+            $scope.alertMessage.show = true;
+            $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+            $scope.loadSystems();
+          }, function (response) {
+            // The server refuses to delete a system that still has aliases or
+            // messages, and says how many of each.
+            $scope.alertMessage.text = (response.data && response.data.message) || 'Error deleting system';
+            $scope.alertMessage.type = 'alert-danger';
+            $scope.alertMessage.show = true;
+            $timeout(function () { $scope.alertMessage.show = false; }, 6000);
+            $scope.loading = false;
+          });
+        }, function () { });
+      };
+    }])
+
+    .controller('SystemDetailController', ['$scope', '$routeParams', 'Api', '$location', '$timeout', function ($scope, $routeParams, Api, $location, $timeout) {
+      $scope.page = 'systemDetail';
+      $scope.alertMessage = {};
+      $scope.loading = true;
+      $scope.isNew = $routeParams.id == 'new';
+
+      Api.SystemDetail.get({ id: $routeParams.id }, function (result) {
+        $scope.system = result;
+        $scope.loading = false;
+      });
+
+      $scope.systemSubmit = function () {
+        $scope.loading = true;
+        Api.SystemDetail.post({ id: $routeParams.id }, $scope.system).$promise.then(function (response) {
+          $scope.alertMessage.text = 'System saved!';
+          $scope.alertMessage.type = 'alert-success';
+          $scope.alertMessage.show = true;
+          $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+          $scope.loading = false;
+          if ($scope.isNew) $location.url('/systems/' + response.id);
+        }, function (response) {
+          $scope.alertMessage.text = 'Error saving system: ' +
+            ((response.data && response.data.message) || response.status);
+          $scope.alertMessage.type = 'alert-danger';
+          $scope.alertMessage.show = true;
+          $timeout(function () { $scope.alertMessage.show = false; }, 6000);
+          $scope.loading = false;
+        });
+      };
+
+      $scope.cancel = function () {
+        $location.url('/systems');
       };
     }])
 
@@ -48,10 +148,62 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
     .controller('AliasController', ['$scope', '$routeParams', 'Api', '$uibModal', '$filter', '$location', '$timeout', 'FileSaver', function ($scope, $routeParams, Api, $uibModal, $filter, $location, $timeout, FileSaver) {
       $scope.loading = true;
       $scope.alertMessage = {};
+      $scope.aliases = [];
+      $scope.systems = [];
+      $scope.filteredAliasGroups = [];
+
+      function rebuildAliasGroups() {
+        var filtered = $filter('filter')($scope.aliases || [], $scope.search);
+        var groups = [];
+        var bySystem = {};
+
+        function ensureGroup(alias) {
+          var key = alias.system_id || 'none';
+          if (!bySystem[key]) {
+            bySystem[key] = {
+              id: key,
+              name: alias.system_label || alias.system_name || 'Unassigned',
+              color: alias.system_color || 'grey',
+              aliases: []
+            };
+            groups.push(bySystem[key]);
+          }
+          return bySystem[key];
+        }
+
+        ($scope.systems || []).forEach(function (system) {
+          bySystem[system.id] = {
+            id: system.id,
+            name: system.label || system.name,
+            color: system.color || 'grey',
+            aliases: []
+          };
+          groups.push(bySystem[system.id]);
+        });
+
+        filtered.forEach(function (alias) {
+          ensureGroup(alias).aliases.push(alias);
+        });
+
+        $scope.filteredAliasGroups = groups.filter(function (group) { return group.aliases.length > 0; });
+      }
+
+      $scope.updateAliasGroups = rebuildAliasGroups;
+      $scope.$watch('search', rebuildAliasGroups);
+
       Api.Aliases.query(null, function(results) {
         $scope.aliases = results;
         $scope.page = 'aliases';
+        rebuildAliasGroups();
         $scope.loading = false;
+      });
+      // Drives the system picker in the import dialog.
+      Api.Systems.query().$promise.then(function (results) {
+        $scope.systems = results;
+        rebuildAliasGroups();
+      }, function () {
+        $scope.systems = [];
+        rebuildAliasGroups();
       });
       Api.Settings.get(null, function(results) {
         if (results) {
@@ -131,37 +283,57 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       };
 
       $scope.aliasImport = function () {
-        var modalHtml = '<div class="modal-header"><h5 class="modal-title" id="modal-title">Impot Aliases</h5></div>';
+        var modalHtml = '<div class="modal-header"><h5 class="modal-title" id="modal-title">Import Aliases</h5></div>';
         var messages = `<p>Available Columns: address, alias, agency, color, icon, ignore, pluginconf</p>
                         <p>Required columns are "address" and "alias", all others are optional.</p>`;
-        modalHtml += '<div class="modal-body"><p><input type="file" id="importcsv"/></p><p>CSV file to be imported</p>' + messages + '</div>';
+        // System picker. Only shown when there is more than one system, so a
+        // single-system install sees the dialog exactly as it was.
+        //
+        // Built as plain markup and read back through the DOM rather than
+        // through the scope, matching how the file input beside it already
+        // works: this modal is opened with a string template and its own
+        // controller, so a scope binding here would be a child-scope write.
+        var systemPicker = '';
+        if ($scope.systems && $scope.systems.length > 1) {
+          var options = $scope.systems.map(function (s) {
+            return '<option value="' + s.id + '">' + (s.label || s.name) + '</option>';
+          }).join('');
+          systemPicker =
+            '<p><label for="importsystem">Import into system</label>' +
+            '<select id="importsystem" class="form-control">' + options +
+            '<option value="file">Use the system column in the file</option>' +
+            '</select></p>' +
+            '<p class="text-muted">Every alias in the file is assigned to this system. A ' +
+            '<strong>system</strong> column in the file is ignored unless the last option is chosen.</p>';
+        }
+        modalHtml += '<div class="modal-body"><p><input type="file" id="importcsv"/></p><p>CSV file to be imported</p>' + systemPicker + messages + '</div>';
         modalHtml += '<div class="modal-footer"><button class="btn btn-success" ng-click="confirmImport()">Import</button><button class="btn btn-danger" ng-click="cancelImport()">Cancel</button></div>';
         var modalInstance = $uibModal.open({
           template: modalHtml,
           controller: ImportController,
 
         });
-        modalInstance.result.then(function () {
-          $scope.aliasImportConfirmed();
+        modalInstance.result.then(function (payload) {
+          $scope.aliasImportConfirmed(payload);
         }, function () {
           //$log.info('Modal dismissed at: ' + new Date());
         });
       };
 
-      $scope.aliasImportConfirmed = function () {
+      $scope.aliasImportConfirmed = function (payload) {
+        payload = payload || {};
+        if (!payload.rows) {
+          $scope.alertMessage.text = payload.error || 'No CSV file selected';
+          $scope.alertMessage.type = 'alert-danger';
+          $scope.alertMessage.show = true;
+          $timeout(function () { $scope.alertMessage.show = false; }, 3000);
+          return;
+        }
         $scope.loading = true;
-        var filename = document.getElementById("importcsv");
-        if (filename.value.length < 1) {
-          // noidea i stole this code.
-        } else {
-          var file = filename.files[0];
-          console.log(file)
-          var fileSize = 0;
-          if (filename.files[0]) {
-            var reader = new FileReader();
-            reader.onload = function (e) {
-              var rows = e.target.result.split("\n");
-              Api.AliasImport.post(rows).$promise.then(function (response) {
+        var systemChoice = payload.system || '';
+        var rows = payload.rows;
+        var params = systemChoice ? { system: systemChoice } : {};
+        Api.AliasImport.post(params, rows).$promise.then(function (response) {
                 console.log(response)
                 $scope.loading = false;
                 $scope.results = response.results
@@ -172,6 +344,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                        <tr>
                           <th>Address</th>
                           <th>Alias</th>
+                          <th>System</th>
                           <th>Result</th>
                         </tr>
                         </thead>
@@ -179,6 +352,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                         <tr ng-repeat="result in results">
                           <td>{{ result.address }}</td>
                           <td>{{ result.alias }}</td>
+                          <td>{{ result.system }}</td>
                           <td>{{ result.result }}</td>
                         </tr>
                         </tbody>
@@ -205,11 +379,7 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
                   scope: $scope
                 });
               })
-            }
-            reader.readAsText(filename.files[0]);
-          }
-          return false; //no idea what this does, was also in the code i stole and it doesn't work without it.
-        }
+        return false; //no idea what this does, was also in the code i stole and it doesn't work without it.
       };
 
       $scope.aliasDetail = function (alias_id) {
@@ -299,7 +469,24 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
 
       var ImportController = function ($scope, $uibModalInstance) {
         $scope.confirmImport = function () {
-          $uibModalInstance.close();
+          var filename = document.getElementById("importcsv");
+          var systemPicker = document.getElementById("importsystem");
+          var systemChoice = systemPicker ? systemPicker.value : '';
+          if (!filename || !filename.files || !filename.files.length) {
+            $uibModalInstance.close({ error: 'No CSV file selected', system: systemChoice });
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            $uibModalInstance.close({
+              rows: e.target.result.split("\n"),
+              system: systemChoice
+            });
+          };
+          reader.onerror = function () {
+            $uibModalInstance.close({ error: 'Could not read selected CSV file', system: systemChoice });
+          };
+          reader.readAsText(filename.files[0]);
         };
         $scope.cancelImport = function () {
           $uibModalInstance.dismiss('cancel');
@@ -731,6 +918,18 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         });
       }
 
+      // The System select. An alias belongs to exactly one system, and a new
+      // one defaults to the default system so it is never created belonging to
+      // nothing - a capcode with no system can never be matched by ingest.
+      $scope.systems = [];
+      var systemsPromise = Api.Systems.query().$promise.then(function (results) {
+        $scope.systems = results;
+        return results;
+      }, function () {
+        $scope.systems = [];
+        return [];
+      });
+
       $scope.aliasLoad = function() {
         $scope.loading = true;
         Api.AliasDetail.get({id: $routeParams.id }, function(results) {
@@ -747,6 +946,12 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
             $scope.isNew = true;
           }
 
+          systemsPromise.then(function (systems) {
+            if ($scope.alias.system_id) return;
+            var fallback = systems.filter(function (s) { return s.is_default == 1; })[0] || systems[0];
+            if (fallback) $scope.alias.system_id = fallback.id;
+          });
+
           // Whichever request finishes second does the seeding. On a Reset click
           // settingsPromise is long since settled, so this just runs on the next
           // digest - one path, no branch. `finally` so a failed settings call
@@ -761,7 +966,10 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       $scope.checkAddress = function() {
         $scope.aliasLoading = true;
         if ($scope.alias.address) {
-          Api.AliasDupeCheck.get({id: $scope.alias.address }, function(results) {
+          // Scoped to the alias's own system: the same address in another
+          // system is a different alias, not a duplicate, and that is the case
+          // multi-system support exists to allow.
+          Api.AliasDupeCheck.get({id: $scope.alias.address, system_id: $scope.alias.system_id }, function(results) {
             if (results.address) {
               $scope.aliasLoading = false;
               if (results.address == $scope.alias.originalAddress) {
@@ -999,6 +1207,14 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
  
     // needs cleanup
     .controller('SettingsController', ['$scope', '$routeParams', 'Api', 'uuid', '$uibModal', '$filter', '$timeout', '$sanitize', function ($scope, $routeParams, Api, uuid, $uibModal, $filter, $timeout, $sanitize) {
+      // Populates the per-key System select. Keys are matched to systems by
+      // name rather than id, so a config survives being moved between installs.
+      $scope.systems = [];
+      Api.Systems.query().$promise.then(function (results) {
+        $scope.systems = results;
+      }, function () {
+        $scope.systems = [];
+      });
       $scope.alertMessage = {};
       Api.Settings.get(null, function(results) {
         if (!results.settings.messages.replaceText)
@@ -1166,7 +1382,11 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       $scope.addKey = function () {
         $scope.settings.auth.keys.push({
           'name': "",
-          'key': ""
+          'key': "",
+          // Empty means the default system, which is what a key with no system
+          // resolves to at ingest. Seeded so the select binds to a real
+          // property rather than creating one on first change.
+          'system': ""
         });
         setupHealth();
       };
@@ -1283,6 +1503,121 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
       };
     }])
 
+    .controller('ImportController', ['$scope', '$interval', '$timeout', 'Api', function ($scope, $interval, $timeout, Api) {
+      $scope.page = 'imports';
+      $scope.loading = false;
+      $scope.alertMessage = {};
+      $scope.jobs = [];
+      $scope.systems = [];
+      $scope.importRequest = { users: 'all' };
+      $scope.selectedJob = null;
+
+      function showMessage(type, text) {
+        $scope.alertMessage.type = type;
+        $scope.alertMessage.text = text;
+        $scope.alertMessage.show = true;
+        $timeout(function () { $scope.alertMessage.show = false; }, 6000);
+      }
+
+      function unresolvedUsers(plan) {
+        if (!plan || !plan.users) return [];
+        return plan.users.filter(function (user) { return user.action === 'REVIEW'; });
+      }
+
+      $scope.unresolvedUsers = unresolvedUsers;
+
+      $scope.loadJobs = function () {
+        Api.Imports.query().$promise.then(function (jobs) {
+          $scope.jobs = jobs;
+          if ($scope.selectedJob) {
+            jobs.forEach(function (job) {
+              if (job.id === $scope.selectedJob.id) $scope.selectedJob = job;
+            });
+          }
+        });
+      };
+
+      Api.Systems.query().$promise.then(function (systems) {
+        $scope.systems = systems;
+      });
+      $scope.loadJobs();
+
+      $scope.analyze = function () {
+        $scope.loading = true;
+        Api.Imports.post(null, {
+          source: $scope.importRequest.source,
+          system: $scope.importRequest.system,
+          label: $scope.importRequest.label,
+          color: $scope.importRequest.color,
+          users: $scope.importRequest.users === 'none' ? 'none' : undefined
+        }).$promise.then(function (job) {
+          $scope.selectedJob = job;
+          $scope.loadJobs();
+          showMessage('alert-success', 'Import analyzed. Review the plan before applying.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Analyze failed');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      $scope.selectJob = function (job) {
+        Api.Imports.get({ id: job.id }).$promise.then(function (fresh) {
+          $scope.selectedJob = fresh;
+        });
+      };
+
+      $scope.savePlan = function () {
+        if (!$scope.selectedJob) return;
+        $scope.loading = true;
+        Api.Imports.updatePlan({ id: $scope.selectedJob.id }, { plan: $scope.selectedJob.plan }).$promise.then(function (job) {
+          $scope.selectedJob = job;
+          $scope.loadJobs();
+          showMessage('alert-success', 'Import plan saved.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Could not save plan');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      $scope.dryRun = function () {
+        if (!$scope.selectedJob) return;
+        $scope.loading = true;
+        Api.Imports.dryRun({ id: $scope.selectedJob.id }, {}).$promise.then(function (response) {
+          $scope.selectedJob.summary = response.summary;
+          showMessage('alert-success', 'Dry run completed and rolled back.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Dry run failed');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      $scope.apply = function () {
+        if (!$scope.selectedJob) return;
+        if (unresolvedUsers($scope.selectedJob.plan).length) {
+          showMessage('alert-danger', 'Resolve all REVIEW users before applying.');
+          return;
+        }
+        $scope.loading = true;
+        Api.Imports.apply({ id: $scope.selectedJob.id }, {}).$promise.then(function (job) {
+          $scope.selectedJob = job;
+          $scope.loadJobs();
+          showMessage('alert-warning', 'Import started. PagerMon is in maintenance mode until it completes.');
+        }, function (response) {
+          showMessage('alert-danger', (response.data && response.data.message) || 'Apply failed');
+        })['finally'](function () { $scope.loading = false; });
+      };
+
+      var poll = $interval(function () {
+        if ($scope.selectedJob && $scope.selectedJob.status === 'running') {
+          Api.Imports.get({ id: $scope.selectedJob.id }).$promise.then(function (job) {
+            $scope.selectedJob = job;
+            $scope.loadJobs();
+          });
+        }
+      }, 3000);
+
+      $scope.$on('$destroy', function () {
+        $interval.cancel(poll);
+      });
+    }])
+
     .controller('AdminController', ['$scope', '$routeParams', 'Api', function ($scope, $routeParams, Api) {
       $scope.page = 'admin';
     }])
@@ -1316,7 +1651,19 @@ angular.module('app', ['ngRoute', 'ngResource', 'ngSanitize', 'angular-uuid', 'u
         .when('/aliases/:id', {
           templateUrl: '/templates/admin/aliasDetails.html' + v,
           controller: 'AliasDetailCtrl'
-       });
+       })
+        .when('/systems', {
+          templateUrl: '/templates/admin/systems.html' + v,
+          controller: 'SystemController'
+        })
+        .when('/systems/:id', {
+          templateUrl: '/templates/admin/systemDetails.html' + v,
+          controller: 'SystemDetailController'
+        })
+        .when('/imports', {
+          templateUrl: '/templates/admin/imports.html' + v,
+          controller: 'ImportController'
+        });
       $httpProvider.defaults.headers.delete = { "Content-Type": "application/json;charset=utf-8" };
       $httpProvider.interceptors.push(function($q, $location) {
         return {

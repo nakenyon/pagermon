@@ -1,0 +1,80 @@
+<!-- One paging system. Modelled on userDetails.html.
+     Every ng-model here binds through the `system` object rather than a bare
+     property: this template is loaded into an ng-view child scope, and a bare
+     binding there writes to the child scope, leaving the parent unchanged -
+     the trap that shipped a broken forgot-password form in 2026.8.10/11 and
+     that test/templates.bindings.test.js now guards. -->
+<div class="row" style="padding-top: 11px;">
+</div>
+<div ng-if="loading" class="loading"><i class="fa fa-spinner fa-spin"></i></div>
+<div class="alert {{alertMessage.type}} alert-dismissable alert-fixed fade in" ng-if="alertMessage.show">
+  <button type="button" class="close" data-dismiss="alert" aria-label="Close" ng-click="alertMessage.show = false">&times;</button>
+  <strong>{{alertMessage.text}}</strong>
+</div>
+<div class="row" style="padding-top: 10px">
+  <div class="col-sm-6 col-xs-12">
+    <h4 style="padding-left: 15px;"><a href="/admin/">Admin</a> / <a href="/admin/systems/">Systems</a> / {{system.name || 'New'}}</h4>
+  </div>
+  <div class="col-xs-12">
+    <hr />
+    <form ng-submit="systemSubmit()" class="form-horizontal" name="systemForm">
+      <h5>System Details</h5>
+      <div class="form-group" ng-class="!system.name ? 'has-error' : 'has-success'">
+        <label for="system.name" class="col-xs-4 col-sm-3 control-label">Name</label>
+        <div class="col-xs-8 col-sm-9">
+          <input class="form-control" type="text" name="system.name" ng-model="system.name" maxlength="64" required>
+          <span id="helpBlock" class="help-block">
+            Required. This is the value an API key's <strong>system</strong> field must match in Settings.
+          </span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="system.label" class="col-xs-4 col-sm-3 control-label">Display Label</label>
+        <div class="col-xs-8 col-sm-9">
+          <input class="form-control" type="text" name="system.label" ng-model="system.label" maxlength="255">
+          <span id="helpBlock" class="help-block">Shown in the system selector. Defaults to the name.</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="system.color" class="col-xs-4 col-sm-3 control-label">Badge Colour</label>
+        <div class="col-xs-8 col-sm-9">
+          <input class="form-control" type="text" name="system.color" ng-model="system.color" maxlength="32"
+                 placeholder="e.g. purple or #663399">
+          <span id="helpBlock" class="help-block">Background colour of the System column on the message list.</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="system.enabled" class="col-xs-4 col-sm-3 control-label">Enabled</label>
+        <div class="col-xs-8 col-sm-9">
+          <select name="system.enabled" ng-model="system.enabled" class="form-control"
+                  ng-options="option.v as option.n for option in [{v:1,n:'Yes'},{v:0,n:'No'}]">
+          </select>
+          <span id="helpBlock" class="help-block">A disabled system is hidden from the selector. Its messages are kept.</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="system.is_default" class="col-xs-4 col-sm-3 control-label">Default System</label>
+        <div class="col-xs-8 col-sm-9">
+          <select name="system.is_default" ng-model="system.is_default" class="form-control"
+                  ng-options="option.v as option.n for option in [{v:0,n:'No'},{v:1,n:'Yes'}]">
+          </select>
+          <span id="helpBlock" class="help-block">
+            Messages from an API key with no system configured land here. Exactly one system is the
+            default; setting it here clears it elsewhere. The default system cannot be deleted.
+          </span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="system.sortorder" class="col-xs-4 col-sm-3 control-label">Sort Order</label>
+        <div class="col-xs-8 col-sm-9">
+          <input class="form-control" type="number" name="system.sortorder" ng-model="system.sortorder">
+          <span id="helpBlock" class="help-block">Order in the system selector. Lowest first.</span>
+        </div>
+      </div>
+      <div class="btn-group-vertical" id="buttons-management">
+        <button type="submit" ng-disabled="!system.name" class="btn btn-success">Save</button>
+        <button type="button" ng-click="cancel();" class="btn btn-default">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>

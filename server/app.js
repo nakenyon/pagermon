@@ -243,15 +243,30 @@ app.use(function(err, req, res, next) {
   // set locals, only providing error in development
   res.locals.message = err.message;
   res.locals.error = req.app.get('env') === 'development' ? err : {};
-  //these 3 have to be here to stop the error handler shitting up the logs with undefined references when it receives a 500 error ... nfi why
-  res.locals.login = req.isAuthenticated();
+  // Everything the header, menu and footer read has to be set here too. An
+  // error raised early - a malformed request body, a CSRF rejection - skips the
+  // middleware and routers that normally set these, and a template that hits an
+  // undefined local throws, leaving Express to send a bare "<pre>Bad Request</pre>".
+  // test/errorpage.test.js renders every theme with only these locals.
+  res.locals.version = version;
+  res.locals.faKey = nconf.get('global:faKey');
   res.locals.gaEnable = nconf.get('monitoring:gaEnable');
+  res.locals.gaTrackingCode = nconf.get('monitoring:gaTrackingCode');
   res.locals.monitorName = nconf.get("global:monitorName");
-  res.locals.register = nconf.get('auth:registration')
+  res.locals.register = nconf.get('auth:registration');
+  // The menu reads user.role and user.username whenever login is true, so the
+  // two must agree.
+  res.locals.user = req.user || false;
+  res.locals.login = !!(req.user && typeof req.isAuthenticated === 'function' && req.isAuthenticated());
 
   // render the error page
   res.status(err.status || 500);
-  res.render(path.join(__dirname,'themes',theme, 'views', 'global', 'error'), { title: title });
+  res.render(path.join(__dirname,'themes',theme, 'views', 'global', 'error'), { title: title }, function(renderErr, html) {
+    if (!renderErr) return res.send(html);
+    // Log it - until now a broken error page failed silently.
+    logger.main.error('Error page failed to render: ' + renderErr.message);
+    res.type('text/plain').send(String(err.status || 500) + ' ' + (err.message || 'Error'));
+  });
 });
 
 // Add cronjob to automatically refresh aliases

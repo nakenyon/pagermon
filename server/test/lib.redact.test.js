@@ -7,7 +7,12 @@ const redact = require('../lib/redact');
 const logger = require('../log');
 
 const M = redact.MASK;
-const WEBHOOK = 'https://discord.com/api/webhooks/1259392693369569300/3cmkeCoUjp8fN7RCfPPzEmZEcFvtX8kmAMuHQiqkam';
+// Every credential below is synthetic. Values shaped like a real token are
+// assembled at runtime so secret scanners do not mistake the source for a leak -
+// and never paste a value from a real config or log into this file.
+const fake = (prefix, n) => prefix + 'x'.repeat(n);
+const WEBHOOK = 'https://discord.com/api/webhooks/' + '1'.repeat(19) + '/' + fake('FAKEhookTOKEN', 55);
+const TELEGRAM = '1'.repeat(9) + ':' + fake('FAKEbotTOKEN', 23);
 const BCRYPT = '$2a$10$' + 'N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
 
 describe('Log redaction', function () {
@@ -15,7 +20,7 @@ describe('Log redaction', function () {
         it('masks credentials in plugin config and alias pluginconf without touching the original', function () {
             const plugins = {
                 SMTP: { enable: true, server: 'smtp.example.com', username: 'me@example.com', password: 'hunter2hunter2' },
-                Pushover: { enable: true, pushAPIKEY: 'aqtsx6vhsgn92a3pjtmp' },
+                Pushover: { enable: true, pushAPIKEY: 'fakepushoverapikey00000' },
                 Telegram: { teleAPIKEY: '123456:ABCDEF' }
             };
             const out = redact.object(plugins);
@@ -32,7 +37,7 @@ describe('Log redaction', function () {
             const out = redact.object({
                 pluginconf: {
                     Discord: { enable: true, webhook: WEBHOOK },
-                    Pushover: { enable: true, group: 'gfkv32utfnrgzybwsf67', sound: { value: 'pushover' } },
+                    Pushover: { enable: true, group: 'fakepushovergroupkey00', sound: { value: 'pushover' } },
                     SMTP: { enable: true, mailto: 'abc123@pomail.net' },
                     Slack: { bottoken: 'xoxb-1-2-3' }
                 }
@@ -70,17 +75,17 @@ describe('Log redaction', function () {
     it('query() redacts pluginconf JSON bound into a knex statement', function () {
         const msg = { method: 'update', sql: 'update `capcodes` set `pluginconf` = ?', bindings: ['66', JSON.stringify({ Discord: { webhook: WEBHOOK } })] };
         const out = JSON.stringify(redact.query(msg));
-        assert(!out.includes('3cmkeCoUjp8f'), out);
+        assert(!out.includes('FAKEhookTOKEN'), out);
         assert(out.includes('66'));
-        assert.equal(msg.bindings[1].includes('3cmkeCoUjp8f'), true);
+        assert.equal(msg.bindings[1].includes('FAKEhookTOKEN'), true);
     });
 
     describe('scrub()', function () {
         it('masks secret fields as util.inspect, JSON and escaped JSON print them', function () {
-            const inspected = util.format('%o', { SMTP: { password: 'baz*xud2kwg.HBH-yje' } });
-            const json = JSON.stringify({ pushAPIKEY: 'aqtsx6vhsgn92a3pjtmp', name: 'ok' });
+            const inspected = util.format('%o', { SMTP: { password: 'fake-smtp-password' } });
+            const json = JSON.stringify({ pushAPIKEY: 'fakepushoverapikey00000', name: 'ok' });
             const nested = JSON.stringify({ bindings: [JSON.stringify({ SMTP: { mailto: 'abc123@pomail.net' } })] });
-            for (const [text, secret] of [[inspected, 'baz*xud2kwg'], [json, 'aqtsx6vhsgn9'], [nested, 'abc123@pomail']]) {
+            for (const [text, secret] of [[inspected, 'fake-smtp-password'], [json, 'fakepushoverapikey'], [nested, 'abc123@pomail']]) {
                 const out = redact.scrub(text);
                 assert(!out.includes(secret), out);
                 assert(out.includes(M), out);
@@ -89,9 +94,9 @@ describe('Log redaction', function () {
         });
 
         it('masks secrets that have a recognisable format anywhere in a line', function () {
-            const out = redact.scrub(`hash ${BCRYPT} hook ${WEBHOOK} bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsawE ` +
+            const out = redact.scrub(`hash ${BCRYPT} hook ${WEBHOOK} bot ${TELEGRAM} ` +
                 '"GET /auth/reset-password/Zk3j-9_xYt HTTP/1.1" POST /x?token=abc&y=1');
-            for (const s of ['N9qo8uLOick', '3cmkeCoUjp8f', 'AAHdqTcvCH1v', 'Zk3j-9_xYt', 'token=abc']) {
+            for (const s of ['N9qo8uLOick', 'FAKEhookTOKEN', 'FAKEbotTOKEN', 'Zk3j-9_xYt', 'token=abc']) {
                 assert(!out.includes(s), `${s} in ${out}`);
             }
             assert(out.includes('https://discord.com/api/webhooks/' + M));
@@ -137,6 +142,6 @@ describe('Log redaction', function () {
         }
         assert(written.length > 0);
         assert(!/leaky-\w+-key/.test(written), written);
-        assert(!written.includes('3cmkeCoUjp8f'), written);
+        assert(!written.includes('FAKEhookTOKEN'), written);
     });
 });

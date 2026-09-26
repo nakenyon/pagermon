@@ -9,9 +9,17 @@ function run(trigger, scope, data, config, callback) {
           logger.main.error('Pushover: ' + data.address + ' No User/Group key set. Please enter User/Group Key.');
             callback();
           } else {
+            // onerror must be passed here, not on the message: the library
+            // only looks for it on the instance and otherwise throws API
+            // errors (e.g. an empty group) from the response handler, which
+            // escapes as an uncaughtException and restarts the server - taking
+            // any in-flight plugins like SMTP down with it.
             var p = new push({
               user: pConf.group,
               token: config.pushAPIKEY,
+              onerror: function(err) {
+                logger.main.error('Pushover: ' + data.address + ' ' + err);
+              }
             });
 
             var pushSound;
@@ -28,10 +36,7 @@ function run(trigger, scope, data, config, callback) {
               message: data.message,
               title: data.agency+' - '+data.alias,
               sound: pushSound,
-              priority: pushPri,
-              onerror: function(err) {
-                logger.main.error('Pushover:', err);
-                }
+              priority: pushPri
             };
 
             if (pushPri == 2 || pushPri == '2') {

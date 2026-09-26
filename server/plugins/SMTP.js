@@ -40,7 +40,7 @@ function run(trigger, scope, data, config, callback) {
             logger.main.error('SMTP:' + error);
             callback();
           } else {
-            logger.main.info('SMTP:' + 'Message sent: %s', info.messageId);
+            logger.main.info('SMTP: Message sent: ' + info.messageId);
             callback();
           }
         });

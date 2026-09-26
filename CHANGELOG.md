@@ -1,3 +1,41 @@
+# 2026.9.26
+
+* Fixed: a Pushover API error - for example a group key with no users or
+  active devices - crashed the whole server with an uncaughtException. It then
+  restarted a few seconds later, but every other plugin still running for that
+  message was killed mid-flight, so an SMTP email for the same alias was
+  silently never sent. The error handler was attached to the message rather
+  than the Pushover client, where the library looks for it. Pushover errors are
+  now logged and the other plugins complete.
+* **Secrets are no longer written to the logs at any level.** At `debug`, the
+  plugin dispatcher dumped the full plugin configuration and alias settings for
+  every message, so `pagermon.log` held the SMTP password, Pushover and other
+  API keys, Discord webhook URLs, Pushover/Prowl user keys and alias email
+  recipients in cleartext; `db.log` held the same through logged query
+  bindings; and `http.log` held raw password-reset tokens from the reset link
+  URL. Structured dumps now mask credential fields (webhook URLs keep their
+  host), and every line from every logger is scrubbed as a safety net - by the
+  values currently in secret config fields, by field name, and by format
+  (bcrypt hashes, chat webhook URLs, Telegram bot tokens, reset/verify links,
+  credentials in query strings).
+  * **Existing log files are not rewritten.** If you have run at `debug`,
+    rotate the SMTP password and any API keys that appear in them and delete
+    the old `logs/*.log` files.
+* Fixed: an error raised before routing - such as a malformed JSON request
+  body - rendered Express's bare `<pre>Bad Request</pre>` instead of the themed
+  error page, because the page's header needs `faKey` and `version`, which
+  only the routers set. A logged-in user or Google Analytics being enabled
+  broke it the same way (`user`, `gaTrackingCode`). The error handler now sets
+  everything the page reads, and logs if the page ever fails to render rather
+  than failing silently.
+* The SMTP plugin's success log line now includes the message id instead of a
+  literal `%s`.
+* **SMTP on port 465 may be blocked by your host.** Some cloud providers
+  (Hetzner Cloud, for one) block outbound ports 25 and 465 by default, which
+  makes the SMTP plugin hang until it times out. Use port **587** with *Enable
+  SSL/TLS* off: the plugin requires STARTTLS and validates the certificate, so
+  the connection is still encrypted.
+
 # 2026.9.15
 
 * **Multi-system support.** A CAPCODE address is only unique within a paging

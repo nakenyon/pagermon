@@ -1,5 +1,6 @@
 const axios = require('axios').default;
 var logger = require('../log');
+var redact = require('../lib/redact');
 
 function run(trigger, scope, data, config, callback) {
   let pConf = data.pluginconf.AdvancedWebhook;
@@ -19,7 +20,7 @@ function run(trigger, scope, data, config, callback) {
     dat = dat.replace("/icon/", data.icon);
     dat = dat.replace("/color/", data.color);
 
-    logger.main.debug('AdvancedWebhook: Sending to ' + config.URL + ': ' + dat);
+    logger.main.debug('AdvancedWebhook: Sending to ' + redact.url(config.URL) + ': ' + dat);
 
     axios.post(config.URL, dat, {
       headers: {

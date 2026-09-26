@@ -7,6 +7,7 @@ var confFile = './config/config.json';
 nconf.file({file: confFile});
 nconf.load();
 var logger = require('../log');
+var redact = require('../lib/redact');
 
 function handle(trigger, scope, data, callback) {
     var plugins = nconf.get("plugins");
@@ -14,9 +15,9 @@ function handle(trigger, scope, data, callback) {
     logger.main.debug(`trigger: ${trigger} scope: ${scope}`);
     logger.main.debug('======================');
     logger.main.debug('data object');
-    logger.main.debug(util.format('%o',data));
+    logger.main.debug(util.format('%o',redact.object(data)));
     logger.main.debug('plugins object');
-    logger.main.debug(util.format('%o',plugins));
+    logger.main.debug(util.format('%o',redact.object(plugins)));
     logger.main.debug('======================');
 
     async.eachOf(plugins, function(conf, plugin, cb) {

@@ -1,5 +1,6 @@
 const axios = require('axios').default;
 var logger = require('../log');
+var redact = require('../lib/redact');
 
 function run(trigger, scope, data, config, callback) {
   let pConf = data.pluginconf.SimpleWebhook;
@@ -18,7 +19,7 @@ function run(trigger, scope, data, config, callback) {
     if (config.sendIcon) message.icon = data.icon;
     if (config.sendColor) message.color = data.color;
 
-    logger.main.debug('SimpleWebhook: Sending to ' + config.URL + ': ' + JSON.stringify(message));
+    logger.main.debug('SimpleWebhook: Sending to ' + redact.url(config.URL) + ': ' + JSON.stringify(message));
 
     axios.post(config.URL, message, {
       headers: {

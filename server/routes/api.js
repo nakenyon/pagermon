@@ -7,6 +7,7 @@ var util = require('util');
 var _ = require('underscore');
 var pluginHandler = require('../plugins/pluginHandler');
 var logger = require('../log');
+var redact = require('../lib/redact');
 var db = require('../knex/knex.js');
 var converter = require('json-2-csv');
 var fs = require('fs');
@@ -858,7 +859,7 @@ router.route('/capcodes')
           logger.main.error(err);
           res.status(500).send(err);
         })
-      logger.main.debug(util.format('%o', req.body || 'no request body'));
+      logger.main.debug(util.format('%o', redact.object(req.body) || 'no request body'));
     } else {
       res.status(500).json({ message: 'Error - address or alias missing' });
     }
@@ -1388,7 +1389,7 @@ router.route('/capcodes/:id')
             logger.main.error(err)
             res.status(500).send(err);
           })
-        logger.main.debug(util.format('%o', req.body || 'request body empty'));
+        logger.main.debug(util.format('%o', redact.object(req.body) || 'request body empty'));
       } else {
         res.status(500).json({ message: 'Error - address or alias missing' });
       }
@@ -1413,7 +1414,7 @@ router.route('/capcodes/:id')
       .catch((err) => {
         res.status(500).send(err);
       })
-    logger.main.debug(util.format('%o', req.body || 'request body empty'));
+    logger.main.debug(util.format('%o', redact.object(req.body) || 'request body empty'));
   });
 
 router.route('/capcodeCheck/:id')

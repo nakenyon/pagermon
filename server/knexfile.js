@@ -1,6 +1,7 @@
 var nconf = require('nconf');
 var confFile = './config/config.json';
 var logger = require('./log');
+var redact = require('./lib/redact');
 var loglevel = nconf.get('global:loglevel');
 
 if(loglevel === 'debug') {
@@ -51,13 +52,13 @@ var dbconfig = {
         logger.db.info(JSON.stringify(message))
       },
       error(message) {
-        logger.db.error(JSON.stringify(message))
+        logger.db.error(JSON.stringify(redact.query(message)))
       },
       deprecate(message) {
         logger.db.info(JSON.stringify(message))
       },
       debug(message) {
-        logger.db.debug(JSON.stringify(message))
+        logger.db.debug(JSON.stringify(redact.query(message)))
       },
     }
 }

@@ -1,6 +1,7 @@
 var telegram = require('telegram-bot-api');
 var util = require('util');
 var logger = require('../log');
+var redact = require('../lib/redact');
 
 function run(trigger, scope, data, config, callback) {
     var tConf = data.pluginconf.Telegram;
@@ -22,7 +23,7 @@ function run(trigger, scope, data, config, callback) {
                 text: notificationText,
                 parse_mode: "Markdown"
             }).then(function(data) {
-                logger.main.debug('Telegram: ' + util.inspect(data, false, null));
+                logger.main.debug('Telegram: ' + util.inspect(redact.object(data), false, null));
                 callback();
             }).catch(function(err) {
                 logger.main.error('Telegram: ' + err);

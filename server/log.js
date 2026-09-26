@@ -1,5 +1,6 @@
 const winston = require('winston');
 const { format } = winston;
+const redact = require('./lib/redact');
 // const { combine, label, json, cli } = format;
 // load the config file
 var nconf = require('nconf');
@@ -9,9 +10,18 @@ nconf.load();
 
 var loglevel = nconf.get('global:loglevel');
 
+// Applied first in every logger below, so no level or transport - including
+// the uncaught exception handler - can write a credential in the clear.
+const scrubSecrets = format(info => {
+    info.message = redact.scrub(info.message);
+    if (info.stack) info.stack = redact.scrub(info.stack);
+    return info;
+});
+
 
 winston.loggers.add('pagermon', {
     format: format.combine(
+        scrubSecrets(),
         format.colorize(),
         format.label({ label: '[pmon]' }),
         format.timestamp({format:"YYYY-MM-DD HH:mm:ss"}),
@@ -37,6 +47,7 @@ winston.loggers.add('pagermon', {
 
 winston.loggers.add('http', {
     format: format.combine(
+        scrubSecrets(),
         format.colorize(),
         format.label({ label: '[http]' }),
         format.timestamp({format:"YYYY-MM-DD HH:MM:SS"}),
@@ -61,6 +72,7 @@ winston.loggers.add('http', {
 
 winston.loggers.add('db', {
     format: format.combine(
+        scrubSecrets(),
         format.colorize(),
         format.label({ label: '[db]' }),
         format.timestamp({format:"YYYY-MM-DD HH:mm:ss"}),
@@ -86,6 +98,7 @@ winston.loggers.add('db', {
 
 winston.loggers.add('auth', {
     format: format.combine(
+        scrubSecrets(),
         format.colorize(),
         format.label({ label: '[auth]' }),
         format.timestamp({format:"YYYY-MM-DD HH:mm:ss"}),

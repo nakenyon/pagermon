@@ -1,5 +1,6 @@
 const axios = require('axios').default;
 var logger = require('../log');
+var redact = require('../lib/redact');
 
 function run(trigger, scope, data, config, callback) {
   var msConf = data.pluginconf.MicrosoftTeams;
@@ -13,7 +14,7 @@ function run(trigger, scope, data, config, callback) {
         text: data.message,
       };
 
-      logger.main.debug('MSTeams: Sending to ' + msConf.webhookuri + ': ' + JSON.stringify(message));
+      logger.main.debug('MSTeams: Sending to ' + redact.url(msConf.webhookuri) + ': ' + JSON.stringify(message));
 
       axios.post(msConf.webhookuri, message, {
         timeout: 5000, // Timeout 5s

@@ -5,6 +5,7 @@
 
 const axios = require('axios').default;
 var logger = require('../log')
+var redact = require('../lib/redact');
 
 function run (trigger, scope, data, config, callback) {
   if (config.repeatURI) {
@@ -30,7 +31,7 @@ function run (trigger, scope, data, config, callback) {
         UUID: config.repeatUUID,
       };
 
-      logger.main.debug('MessageRepeat: Sending to ' + config.repeatURI + ': ' + JSON.stringify(message));
+      logger.main.debug('MessageRepeat: Sending to ' + redact.url(config.repeatURI) + ': ' + JSON.stringify(message));
 
       axios.post(config.repeatURI, message, {
         headers: {
